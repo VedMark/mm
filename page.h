@@ -1,38 +1,36 @@
 #ifndef MEMORY_MANAGER_PAGE_H
 #define MEMORY_MANAGER_PAGE_H
 
+typedef unsigned long long addr;
 
-struct _page_flags {
+typedef struct Block {
+    struct block*	next;
+    unsigned int	size;
+} Block;
+
+typedef struct Page {
+    Block *first_free;
+    Block *first_used;
+} Page;
+typedef Page *PagePtr;
+
+typedef struct PageFlags {
     unsigned char loaded: 1;
     unsigned char referenced: 1;
     unsigned char modified: 1;
-};
-typedef struct _page_flags PAGEFLAGS;
-typedef unsigned long addr;
+} PageFlags;
 
-struct _page {
-    addr physical_page;
-    PAGEFLAGS flags;
-};
-typedef struct _page PAGE;
-typedef PAGE *PAGEPTR;
+typedef struct PageDescriptor {
+    addr        phys_addr;
+    PageFlags   flags;
+} PageDescriptor;
 
-struct _pageNode {
-    PAGE page;
-    struct _pageNode *nextPtr;
-};
-typedef struct _pageNode PAGENODE;
-typedef PAGENODE *PAGENODEPTR;
+typedef struct PageNode {
+    PagePtr         page;
+    PageDescriptor  descriptor;
+} PageNode;
+typedef PageNode *PageNodePtr;
 
-struct _page_table {
-    PAGENODEPTR head;
-    PAGENODEPTR tail;
-};
-typedef struct _page_table PAGETABLE;
-typedef PAGETABLE *PAGETABLEPTR;
-
-int page_isEmpty(PAGENODEPTR headPtr);
-void page_push(PAGETABLEPTR, PAGE);
-PAGE page_pop(PAGETABLEPTR);
+typedef PageNodePtr *PageTablePtr;
 
 #endif //MEMORY_MANAGER_PAGE_H

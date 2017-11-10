@@ -1,43 +1,41 @@
-#include "page.h"
-#include <stdlib.h>
-
-int page_isEmpty(PAGENODEPTR headPtr) {
-    return headPtr == NULL;
-}
-
-void page_push(PAGETABLEPTR table, PAGE value) {
-    PAGENODEPTR newPtr = malloc(sizeof(PAGENODE));
-
-    if(newPtr != NULL) {
-        *newPtr = (PAGENODE){
-                .page.physical_page = value.physical_page,
-                .page.flags = value.flags,
-                .nextPtr = NULL
-        };
-
-        if(page_isEmpty(table->head))
-            table->head = newPtr;
-        else
-            table->tail->nextPtr = newPtr;
-
-        table->tail = newPtr;
-    }
-    else {
-        table->head = table->tail = newPtr;
-    }
-}
-
-PAGE page_pop(PAGETABLEPTR table) {
-    PAGE value;
-    PAGENODEPTR tempPtr;
-
-    value = table->head->page;
-    tempPtr = table->head;
-    table->head = table->head->nextPtr;
-
-    if(table->head == NULL)
-        table->tail = NULL;
-
-    free(tempPtr);
-    return value;
-}
+//#include "page.h"
+//#include <stdlib.h>
+//
+//int table_isEmpty(PageTablePtr tablePtr) {
+//    return tablePtr->head == NULL;
+//}
+//
+//int table_push(PageTablePtr table, PagePtr value) {
+//    PageNodePtr newPtr = malloc(sizeof(PageNode));
+//
+//    if(newPtr != NULL) {
+//        PageDescriptor descr({0});
+//
+//        *newPtr = (PageNode){
+//                .ptrPage = value,
+//                .descriptor = descr,
+//                .ptrPrev = table->tail->ptrPage,
+//                .ptrNext = NULL
+//        };
+//
+//        if(table_isEmpty(table)) table->head = newPtr;
+//        table->tail = newPtr;
+//    }
+//    else return -2;
+//    return 0;
+//}
+//
+//Page table_pop(PageTablePtr table) {
+//    Page value;
+//    PageNodePtr tempPtr;
+//
+//    value = table->head->page;
+//    tempPtr = table->head;
+//    table->head = table->head->nextPtr;
+//
+//    if(table->head == NULL)
+//        table->tail = NULL;
+//
+//    free(tempPtr);
+//    return value;
+//}
