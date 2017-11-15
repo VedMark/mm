@@ -4,20 +4,21 @@
 typedef char *PA;
 
 typedef struct Block {
-    struct block*	next;
+    struct Block*	next;
     unsigned int	size;
 } Block;
 
 typedef struct Page {
-    Block *first_free;
-    Block *first_used;
+    Block   *first_free;
+    Block   *first_used;
+    size_t   max_free_size;
 } Page;
 typedef Page *PagePtr;
 
 typedef struct PageFlags {
-    unsigned char loaded: 1;
-    unsigned char referenced: 1;
-    unsigned char modified: 1;
+    unsigned char   loaded: 1;
+    unsigned char   referenced: 1;
+    unsigned char   modified: 1;
 } PageFlags;
 
 typedef struct PageDescriptor {
@@ -26,15 +27,16 @@ typedef struct PageDescriptor {
 } PageDescriptor;
 
 typedef struct PageNode {
-    PagePtr         page;
+    Page            page;
     PageDescriptor  descriptor;
 } PageNode;
 typedef PageNode *PageNodePtr;
 
 typedef struct PageTable{
-    PageNodePtr table;
-    u_int count;
+    PageNodePtr     nodes;
+    u_int           count;
 } PageTable;
+typedef PageTable *PageTablePtr;
 
 
 typedef unsigned long size_t;
@@ -47,10 +49,9 @@ typedef struct SegmentFlags {;
     unsigned char   modified: 1;
 } SegmentFlags;
 
-typedef struct Segment {
-    PageTable page_table;
-} Segment;
-typedef struct Segment *SegmentPtr;
+typedef PageTable Segment;
+
+typedef PageTable *SegmentPtr;
 
 typedef struct SegmentDescriptor {
     PA              base_addr;
@@ -61,17 +62,18 @@ typedef struct SegmentDescriptor {
 typedef SegmentDescriptor *SegmentDescriptorPtr;
 
 typedef struct SegmentNode {
-    Segment segment;
-    SegmentDescriptor descriptor;
+    SegmentPtr          segment;
+    SegmentDescriptor   descriptor;
 } SegmentNode;
 typedef SegmentNode *SegmentNodePtr;
 
 typedef struct SegmentTable{
-    SegmentNodePtr table;
-    size_t szPage;
-    u_int count;
+    SegmentNodePtr  nodes;
+    size_t          szPage;
+    u_int           count;
 } SegmentTable;
 typedef SegmentTable *SegmentTablePtr;
+
 
 int init_tables(SegmentTablePtr, u_int seg_count, u_int, size_t, PA);
 void destroy_tables(SegmentTablePtr);
