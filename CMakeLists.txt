@@ -3,5 +3,5 @@ project(memomy_manager)
 
 set(CMAKE_C_STANDARD 11)
 
-set(SOURCE_FILES main.c mmemory.h mmemory.c page.c page.h segment.h segment.c)
+set(SOURCE_FILES main.c include/logger.h logger.c include/mmemory.h mmemory.c include/page_segment.h page_segment.c include/cache.h cache.c include/assertion.h include/hard_drive.h hard_drive.c include/ram.h ram.c)
 add_executable(memomy_manager ${SOURCE_FILES})

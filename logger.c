@@ -4,7 +4,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "logger.h"
+#include "include/logger.h"
 
 char *get_current_time() {
     size_t size = 0;
