@@ -22,7 +22,7 @@
 #define RAM_MEM_SIZE ((16) *(USHRT_MAX + (1)))
 #define HDD_MEM_SIZE ((16) * (RAM_MEM_SIZE))
 #define HDD_LOCATION "/tmp/mm_hard_drive"
-#define SEG_COUNT (3)
+#define SEG_COUNT (2)
 
 
 Memory g_RAM;
@@ -30,8 +30,23 @@ HardDrive g_HDD;
 Cache g_cache;
 SegmentTable g_segmentTable;
 
+PA va_to_pa(VA ptr) {
+    PA pa = 0;
+
+}
+
 int malloc_(VA *ptr, size_t szBlock) {
-    return 0;
+    // TODO: how can I choose an appropriate segment?
+    ASSERT(0 < szBlock, "Invalid parameters", WRONG_PARAMETERS_ERROR);
+
+    VA va = NULL;
+    int ret_val = alloc_block(&g_segmentTable, szBlock, &va);
+    ASSERT(-2 != ret_val, "Memory lack", MEMORY_LACK_ERROR);
+    ASSERT(1 != ret_val, strerror(errno), UNKNOWN_ERROR);
+    *ptr = va;
+    print_all_what_I_need(&g_segmentTable);
+
+    return SUCCESS;
 }
 
 int free_(VA ptr){
@@ -39,6 +54,7 @@ int free_(VA ptr){
 }
 
 int read_(VA ptr, void *pBuffer, size_t szBuffer){
+    // TODO: check if ptr is unavailable after deleting;
     return 0;
 }
 
@@ -50,7 +66,7 @@ int write_(VA ptr, void *pBuffer, size_t szBuffer) {
 int init_(int n, int szPage) {
     int ret_val = 0;
 
-    ASSERT(0 < n || 0 < szPage, "Invalid parameters", WRONG_PARAMETERS_ERROR);
+    ASSERT(0 < n && 0 < szPage, "Invalid parameters", WRONG_PARAMETERS_ERROR);
 
     init_ram(&g_RAM, RAM_MEM_SIZE, (size_t) szPage);
     ASSERT((g_RAM.field && g_RAM.pages), strerror(errno), UNKNOWN_ERROR);
@@ -61,9 +77,9 @@ int init_(int n, int szPage) {
 
     ret_val = init_tables(&g_segmentTable, SEG_COUNT, (u_int) n, (size_t) szPage, g_RAM.field);
     ASSERT(1 != ret_val, strerror(errno), UNKNOWN_ERROR);
-    g_segmentTable.table[0].descriptor.rules = READ;
-    g_segmentTable.table[1].descriptor.rules = WRITE;
-    g_segmentTable.table[2].descriptor.rules = READ | WRITE;
+    g_segmentTable.seg_nodes[0].descriptor.rules = READ | EXEC;
+    g_segmentTable.seg_nodes[1].descriptor.rules = READ | WRITE;
+    print_all_what_I_need(&g_segmentTable);
 
     return SUCCESS;
 }

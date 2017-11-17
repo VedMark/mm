@@ -2,8 +2,10 @@
 #define MEMOMY_MANAGER_MMEMORY_H
 
 
-typedef char* VA;
-
+#ifndef VIRT_ADDR
+#define VIRT_ADDR
+typedef char *VA;
+#endif
 
 /**
  	@func	malloc_

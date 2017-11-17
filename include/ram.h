@@ -1,12 +1,22 @@
 #ifndef MEMOMY_MANAGER_RAM_H
 #define MEMOMY_MANAGER_RAM_H
 
-#include "page_segment.h"
+#ifndef PHYS_ADDR
+#define PHYS_ADDR
+typedef char *PA;
+#endif
+
+typedef void *data;
+
+typedef PA MemPage;
+typedef MemPage *MemPagePtr;
 
 typedef struct Memory{
-    PA field;
-    PagePtr pages;
-    size_t page_count;
+    data field;
+    size_t size;
+    MemPagePtr pages;
+    size_t szPage;
+    size_t cPage;
 } Memory;
 typedef Memory *MemoryPtr;
 

@@ -4,9 +4,9 @@
 #include <stddef.h>
 
 #ifndef PHYS_ADDR
+#define PHYS_ADDR
 typedef char *PA;
 #endif
-
 
 typedef struct CacheBlock{
     void  *data;
