@@ -5,6 +5,7 @@
 #ifndef VIRT_ADDR
 #define VIRT_ADDR
 typedef char *VA;
+typedef const VA const_VA;
 #endif
 
 /**

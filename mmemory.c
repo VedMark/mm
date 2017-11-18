@@ -30,13 +30,8 @@ HardDrive g_HDD;
 Cache g_cache;
 SegmentTable g_segmentTable;
 
-PA va_to_pa(VA ptr) {
-    PA pa = 0;
-
-}
 
 int malloc_(VA *ptr, size_t szBlock) {
-    // TODO: how can I choose an appropriate segment?
     ASSERT(0 < szBlock, "Invalid parameters", WRONG_PARAMETERS_ERROR);
 
     VA va = NULL;
@@ -44,13 +39,15 @@ int malloc_(VA *ptr, size_t szBlock) {
     ASSERT(-2 != ret_val, "Memory lack", MEMORY_LACK_ERROR);
     ASSERT(1 != ret_val, strerror(errno), UNKNOWN_ERROR);
     *ptr = va;
-    print_all_what_I_need(&g_segmentTable);
 
     return SUCCESS;
 }
 
 int free_(VA ptr){
-    return 0;
+    int ret_val = free_block(&g_segmentTable, ptr);
+    ASSERT(-2 != ret_val, "Invalid parameters", WRONG_PARAMETERS_ERROR);
+    ASSERT(1 != ret_val, strerror(errno), UNKNOWN_ERROR);
+    return SUCCESS;
 }
 
 int read_(VA ptr, void *pBuffer, size_t szBuffer){
@@ -79,7 +76,6 @@ int init_(int n, int szPage) {
     ASSERT(1 != ret_val, strerror(errno), UNKNOWN_ERROR);
     g_segmentTable.seg_nodes[0].descriptor.rules = READ | EXEC;
     g_segmentTable.seg_nodes[1].descriptor.rules = READ | WRITE;
-    print_all_what_I_need(&g_segmentTable);
 
     return SUCCESS;
 }

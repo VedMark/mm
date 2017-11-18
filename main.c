@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <malloc.h>
 
 #include "include/mmemory.h"
 
@@ -10,6 +11,8 @@ int main() {
     printf("VA - %lu\n", (unsigned long)ptr1);
     malloc_(&ptr2, 3);
     printf("VA - %lu\n", (unsigned long)ptr2);
+    free_(ptr1);
+    free_(ptr2);
     destroy_();
     printf("Hello, World!\n");
     return 0;

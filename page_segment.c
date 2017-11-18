@@ -4,7 +4,92 @@
 
 #include "include/page_segment.h"
 
-typedef enum Block_type{USED, FREE, ANY} Block_type;
+typedef enum Block_type{USED = 0, FREE, ANY} Block_type;
+
+
+const Block *find_last(const_PagePtr restrict ptrPage, Block_type type);
+Block *find_prev(const_PagePtr ptrPage, const Block const *f_block);
+bool found_multipage_space(const_PageTablePtr restrict page_table,
+                           u_int index, size_t szBlock, int bFirst);
+inline u_int log_2(u_int num);
+u_int get_best_fit_offset(const_PagePtr restrict ptrPage,
+                          size_t szBlock,
+                          Block **best_fit);
+inline u_int get_mask(u_int n);
+u_int get_offset(const_PagePtr ptrPage, const Block const *ptrBlock);
+inline VA get_virtual_address(size_t szPage, u_int szAddr, u_int numSeg, u_int numPage,
+                              u_int offset);
+bool insert_block(PageTablePtr restrict table,
+                  u_int j,
+                  Block *restrict f_block,
+                  size_t szBlock,
+                  size_t szPage,
+                  int to_many);
+void remove_block(PageTablePtr table, u_int n_page, Block *block, Block *prev);
+void set_max_free_size(PagePtr page);
+inline void va_to_chunks(const_VA va,
+                  size_t szPage,
+                  u_int szAddr,
+                  u_int *numSeg,
+                  u_int *numPage,
+                  u_int *offset);
+
+
+int alloc_block(SegmentTablePtr restrict table, size_t szBlock, VA *va) {
+    u_int offset = 0;
+    for(u_int i = 0; i < table->count; ++i) {
+        SegmentPtr ptrSegment = table->seg_nodes[i].segment;
+        for (u_int j = 0; j < ptrSegment->count; ++j) {
+            if(0 == i && 0 == j) continue;
+            if (szBlock > table->szPage) {
+                if (found_multipage_space(ptrSegment, 0, szBlock, true)) {
+                    offset = get_offset(&ptrSegment->page_nodes[j].page,
+                                        find_last(&ptrSegment->page_nodes[j].page, ANY));
+                    *va = get_virtual_address(table->szPage, table->szAddr, i, j, offset);
+                    if(insert_block(table->seg_nodes[i].segment, j,
+                                    (Block *) find_last(&ptrSegment->page_nodes[j].page, FREE),
+                                    szBlock, table->szPage, true)) return 0;
+                    else return 1;
+                }
+            }
+            else {
+                PagePtr ptrPage = &table->seg_nodes[i].segment->page_nodes[j].page;
+                if (ptrPage->max_free_size >= szBlock) {
+                    Block *best_block = NULL;
+                    offset = get_best_fit_offset(ptrPage, szBlock, &best_block);
+                    *va = get_virtual_address(table->szPage, table->szAddr, i, j, offset);
+                    if(insert_block(table->seg_nodes[i].segment,
+                                    j, best_block, szBlock, table->szPage, false)) return 0;
+                    else return 1;
+                }
+            }
+        }
+    }
+    return -2;
+}
+
+int free_block(SegmentTablePtr table, VA va){
+    u_int n_seg = NULL;
+    u_int n_page = 0;
+    u_int offset = 0;
+    va_to_chunks(va, table->szPage, table->szAddr, &n_seg, &n_page, &offset);
+    if(0 == n_seg && 0 == n_page)
+        return -2;
+    Block *block = table->seg_nodes[n_seg].segment->page_nodes[n_page].page.first_block;
+    Block *prev = NULL;
+    u_int cur_offset = 0;
+    while(NULL != block) {
+        if(offset >= cur_offset) break;
+        cur_offset += block->size;
+        prev = block;
+        block = block->next;
+    }
+    if(cur_offset != offset)
+        return 1;
+    block->free = true;
+    remove_block(table->seg_nodes[n_seg].segment, n_page, block, prev);
+    return 0;
+}
 
 int init_tables(SegmentTablePtr restrict table, u_int seg_count, u_int n, size_t szPage, PA base_addr) {
     table->seg_nodes = (SegmentNodePtr) calloc(seg_count, sizeof(SegmentNode));
@@ -15,7 +100,7 @@ int init_tables(SegmentTablePtr restrict table, u_int seg_count, u_int n, size_t
     n = n / seg_count;
 
     for(u_int i = 0; i < seg_count; ++i) {
-        table->seg_nodes[i].descriptor.base_virt_addr = (VA) (i * n * szPage);
+        table->seg_nodes[i].descriptor.base_virt_addr = (VA) (i * n * szPage + 2);
         table->seg_nodes[i].descriptor.base_phys_addr = i * n * szPage + base_addr;
         table->seg_nodes[i].descriptor.size = i * n * szPage;
         table->seg_nodes[i].descriptor.flags = (SegmentFlags){0, 0, 0};
@@ -29,6 +114,7 @@ int init_tables(SegmentTablePtr restrict table, u_int seg_count, u_int n, size_t
             nodes[j].page.first_block = (Block *) malloc(sizeof(Block));
             nodes[j].page.first_block->size = szPage;
             nodes[j].page.first_block->free = true;
+            nodes[j].page.first_block->splited = false;
             nodes[j].page.max_free_size = szPage;
             nodes[j].descriptor.phys_addr = pa + j * szPage;
             nodes[j].descriptor.flags = (PageFlags) {0, 0, 0};
@@ -54,57 +140,40 @@ void destroy_tables(SegmentTablePtr restrict table) {
 }
 
 
-int found_multipage_space(const_PageTablePtr restrict page_table,
-                          u_int index, size_t szBlock, int bFirst);
-VA get_virtual_address(VA seg_addr, u_int numPage, size_t szPage, u_int szAddr, u_int offset);
-u_int log_2(u_int num);
-u_int get_best_fit_offset(const_PagePtr restrict ptrPage, size_t szBlock, Block **best_fit);
-u_int get_offset(const_PagePtr ptrPage, const Block const *ptrBlock);
-const Block *find_last(const_PagePtr restrict ptrPage, Block_type type);
-int insert_block(PageTablePtr restrict table,
-                  u_int j,
-                  Block* restrict f_block,
-                  size_t szBlock,
-                  size_t szPage,
-                  int to_many);
-void set_max_free_size(PagePtr page);
-Block *find_prev(const_PagePtr ptrPage, const Block const *f_block);
-
-int alloc_block(SegmentTablePtr restrict table, size_t szBlock, VA *va) {
-    u_int offset = 0;
-    for(u_int i = 0; i < table->count; ++i) {
-        SegmentPtr ptrSegment = table->seg_nodes[i].segment;
-        for (u_int j = 0; j < ptrSegment->count; ++j) {
-            if (szBlock > table->szPage) {
-                if (found_multipage_space(ptrSegment, 0, szBlock, true)) {
-                    offset = get_offset(&ptrSegment->page_nodes[j].page,
-                                        find_last(&ptrSegment->page_nodes[j].page, ANY));
-                    *va = get_virtual_address(table->seg_nodes[i].descriptor.base_virt_addr,
-                                              j, table->szPage, table->szAddr, offset);
-                    if(insert_block(table->seg_nodes[i].segment, j,
-                                 (Block *) find_last(&ptrSegment->page_nodes[i].page, FREE),
-                                 szBlock, table->szPage, true)) return 0;
-                    else return 1;
-                }
-            }
-            else {
-                PagePtr ptrPage = &table->seg_nodes[i].segment->page_nodes[j].page;
-                if (ptrPage->max_free_size >= szBlock) {
-                    Block *best_block = NULL;
-                    offset = get_best_fit_offset(ptrPage, szBlock, &best_block);
-                    *va = get_virtual_address(table->seg_nodes[i].descriptor.base_virt_addr,
-                                              j, table->szPage, table->szAddr, offset);
-                    if(insert_block(table->seg_nodes[i].segment,
-                                 j, best_block, szBlock, table->szPage, false)) return 0;
-                    else return 1;
-                }
-            }
+const Block *find_last(const_PagePtr restrict ptrPage, Block_type type) {
+    const Block *ptr = ptrPage->first_block;
+    const Block *last_block = ptrPage->first_block;
+    if(type == ANY) {
+        while(NULL != ptr->next) {
+            last_block = ptr = ptr->next;
         }
     }
-    return -2;
+    else{
+        while(NULL != ptr->next) {
+            ptr = ptr->next;
+            if(ptr->free == type)
+                last_block = ptr;
+        }
+        if(type != ptr->free) return NULL;
+    }
+    return last_block;
 }
 
-int found_multipage_space(const_PageTablePtr restrict page_table, u_int index, size_t szBlock, int bFirst) {
+Block *find_prev(const_PagePtr ptrPage, const Block const *f_block) {
+    Block *ptr = ptrPage->first_block;
+
+    while(NULL != ptr->next) {
+        if (ptr->next == f_block)
+            return ptr;
+        ptr = ptr->next;
+    }
+    return NULL;
+}
+
+bool found_multipage_space(const_PageTablePtr restrict page_table,
+                           u_int index,
+                           size_t szBlock,
+                           int bFirst) {
     size_t avail_size = 0;
     if(szBlock <= 0) return true;
     if(index >= page_table->count) return false;
@@ -138,6 +207,11 @@ u_int get_best_fit_offset(const_PagePtr restrict ptrPage, size_t szBlock, Block 
     return get_offset(ptrPage, best_block);
 }
 
+u_int get_mask(const u_int n) {
+    const u_int src = (u_int) 1  << n;
+    return src - 1;
+}
+
 u_int get_offset(const_PagePtr ptrPage, const Block const *ptrBlock) {
     const Block *ptr = ptrPage->first_block;
     u_int offset = 0;
@@ -149,50 +223,40 @@ u_int get_offset(const_PagePtr ptrPage, const Block const *ptrBlock) {
     return offset;
 }
 
-const Block *find_last(const_PagePtr restrict ptrPage, Block_type type) {
-    const Block *ptr = ptrPage->first_block;
-    const Block *last_block = ptrPage->first_block;
-    if(type == ANY) {
-        while(NULL != ptr->next) {
-            last_block = ptr = ptr->next;
-        }
-    }
-    else{
-        while(NULL != ptr->next) {
-            ptr = ptr->next;
-            if(ptr->free == type)
-                last_block = ptr;
-        }
-    }
-    return last_block;
-}
+VA get_virtual_address(const size_t szPage,
+                       const u_int szAddr,
+                       const u_int numSeg,
+                       const u_int numPage,
+                       const u_int offset) {
 
-VA get_virtual_address(VA seg_addr, u_int numPage, size_t szPage, u_int szAddr, u_int offset) {
     u_int lg_szPage = log_2((u_int) szPage);
-    unsigned long res = (unsigned long) seg_addr << log_2(szAddr << 1);
-    res =  res << lg_szPage | numPage << lg_szPage | offset;
+    u_int lg_szAddr = log_2(szAddr << 1);
+    unsigned long res = numSeg << lg_szAddr;
+    res = res << lg_szPage | numPage << lg_szPage | offset;
     return (VA) res;
 }
 
-u_int log_2(u_int num) {
-    u_int res = 0;
-    while(num >>=1) ++res;
-    return res;
-}
+bool insert_block(PageTablePtr restrict table,
+                  u_int j,
+                  Block *f_block,
+                  size_t szBlock,
+                  size_t szPage,
+                  int to_many) {
 
-int insert_block(PageTablePtr restrict table, u_int j, Block *f_block, size_t szBlock, size_t szPage, int to_many) {
     Block *block = (Block *) malloc(sizeof(Block));
     if(NULL == block) return false;
     block->free = false;
 
     if(to_many) {
         f_block->free = false;
+        f_block->splited = true;
         szBlock -= f_block->size;
         set_max_free_size(&table->page_nodes[j].page);
         while(true) {
-            ++j;
             if(szBlock < szPage) break;
+            ++j;
             table->page_nodes[j].page.first_block->free = false;
+            table->page_nodes[j].page.first_block->splited = true;
             szBlock -= szPage;
             set_max_free_size(&table->page_nodes[j].page);
         }
@@ -205,7 +269,7 @@ int insert_block(PageTablePtr restrict table, u_int j, Block *f_block, size_t sz
                 block->next = block->next->next;
                 free(tmp);
             }
-            table->page_nodes[++j].page.first_block = block;
+            table->page_nodes[j].page.first_block = block;
         }
     }
     else {
@@ -222,6 +286,64 @@ int insert_block(PageTablePtr restrict table, u_int j, Block *f_block, size_t sz
     return true;
 }
 
+u_int log_2(u_int num) {
+    u_int res = 0;
+    while(num >>=1) ++res;
+    return res;
+}
+
+void remove_block(PageTablePtr table, u_int n_page, Block *block, Block *prev) {
+    if(block->splited){
+        if (NULL != prev) {
+            if (prev->free != 0 && block->free) {
+                prev->next = NULL;
+                prev->size += block->size;
+                free(block);
+            }
+            else {
+                block->free = true;
+                block->splited = false;
+            }
+            ++n_page;
+        }
+        while(n_page < table->count - 1 && table->page_nodes[n_page].page.first_block->splited) {
+            table->page_nodes[n_page].page.first_block->free = true;
+            table->page_nodes[n_page].page.first_block->splited = false;
+            block = table->page_nodes[n_page + 1].page.first_block;
+            if(NULL != block->next && block->next->free) {
+                table->page_nodes[n_page + 1].page.first_block = block->next;
+                block->next->size += block->size;
+                free(block);
+            }
+            else {
+                block->free = true;
+                block->splited = false;
+                break;
+            }
+            ++n_page;
+        }
+    }
+    else if(prev == NULL) {
+        if(block->next->free) {
+            table->page_nodes[n_page].page.first_block = block->next;
+            block->next->size += block->size;
+            free(block);
+        }
+        else block->free = true;
+    }
+    else if(prev->free && block->free) {
+        prev->next = block->next;
+        prev->size += block->size;
+        free(block);
+        if(prev->next->free) {
+            block = prev->next;
+            prev->next = block->next;
+            prev->size += block->size;
+            free(block);
+        }
+    }
+}
+
 void set_max_free_size(PagePtr page) {
     Block *block = page->first_block;
     size_t max_size = 0;
@@ -233,15 +355,14 @@ void set_max_free_size(PagePtr page) {
     page->max_free_size = max_size;
 }
 
-Block *find_prev(const_PagePtr ptrPage, const Block const *f_block) {
-    Block *ptr = ptrPage->first_block;
-
-    while(NULL != ptr->next) {
-        if (ptr->next == f_block)
-            return ptr;
-        ptr = ptr->next;
-    }
-    return NULL;
+void va_to_chunks(const_VA va, const size_t szPage, const u_int szAddr,
+                  u_int *numSeg, u_int *numPage, u_int *offset) {
+    const u_int lg_szPage = log_2((u_int) szPage);
+    const u_int lg_szAddr = log_2(szAddr << 1);
+    *offset = (u_int) ((unsigned long) va & get_mask(lg_szPage));
+    *numPage = (u_int) ((unsigned long) va & get_mask(lg_szAddr) << lg_szPage) >> lg_szPage;
+    *numSeg = (u_int) ((unsigned long) va & get_mask(lg_szAddr) << lg_szAddr << lg_szPage)
+            >> lg_szAddr >> lg_szPage;
 }
 
 
@@ -252,8 +373,21 @@ Block *find_prev(const_PagePtr ptrPage, const Block const *f_block) {
 
 void print_blocks(Block *first) {
     while(first) {
-        printf("\t\t\t\taddr: %d, is_free: %d, size: %d\n", (int) first, first->free, (int) first->size);
+        printf("\t\t\t\taddr: %d, is_free: %d, splited: %d, size: %d\n", (int) first, first->free, first->splited, (int) first->size);
         first = first->next;
+    }
+}
+
+void print_page_table(PageTablePtr table) {
+    for(u_int j = 0; j < table->count; ++j) {
+        printf("\t\t base_pa: %d, l|m|r: %d|%d|%d, max_free_size: %d\n",
+               (int) table->page_nodes[j].descriptor.phys_addr,
+               table->page_nodes[j].descriptor.flags.loaded,
+               table->page_nodes[j].descriptor.flags.modified,
+               table->page_nodes[j].descriptor.flags.referenced,
+               (int) table->page_nodes[j].page.max_free_size
+        );
+        print_blocks(table->page_nodes[j].page.first_block);
     }
 }
 
@@ -269,16 +403,7 @@ void print_all_what_I_need(SegmentTablePtr table) {
                table->seg_nodes[i].descriptor.flags.referenced,
                table->seg_nodes[i].descriptor.rules);
         printf("page_count: %d\n", table->seg_nodes->segment->count);
-        for(u_int j = 0; j < table->seg_nodes[i].segment->count; ++j) {
-            printf("\t\t base_pa: %d, l|m|r: %d|%d|%d, max_free_size: %d\n",
-                   (int) table->seg_nodes[i].segment->page_nodes[j].descriptor.phys_addr,
-                   table->seg_nodes[i].segment->page_nodes[j].descriptor.flags.loaded,
-                   table->seg_nodes[i].segment->page_nodes[j].descriptor.flags.modified,
-                   table->seg_nodes[i].segment->page_nodes[j].descriptor.flags.referenced,
-                   (int) table->seg_nodes[i].segment->page_nodes[j].page.max_free_size
-            );
-            print_blocks(table->seg_nodes[i].segment->page_nodes[j].page.first_block);
-        }
+        print_page_table(table->seg_nodes[i].segment);
         printf("\n");
     }
     printf("\n\n\n");

@@ -9,12 +9,14 @@ typedef char *PA;
 #ifndef VIRT_ADDR
 #define VIRT_ADDR
 typedef char *VA;
+typedef const VA const_VA;
 #endif
 
 typedef struct Block {
     struct Block*	next;
     size_t	        size;
     unsigned char   free: 1;
+    unsigned char   splited: 1;
 } Block;
 
 typedef struct Page {
@@ -91,9 +93,13 @@ typedef SegmentTable *SegmentTablePtr;
 typedef const SegmentTable const *const_SegmentTablePtr;
 
 
+int alloc_block(SegmentTablePtr table, size_t szBlock, VA *va);
+int free_block(SegmentTablePtr table, VA va);
 int init_tables(SegmentTablePtr, u_int seg_count, u_int, size_t, PA);
 void destroy_tables(SegmentTablePtr);
-int alloc_block(SegmentTablePtr table, size_t szBlock, VA *va);
+
+void print_blocks(Block *first);
+void print_page_table(PageTablePtr table);
 void print_all_what_I_need(SegmentTablePtr table);
 
 #endif //MEMORY_MANAGER_PAGE_SEGMENT_H
