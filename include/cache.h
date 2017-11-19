@@ -1,5 +1,5 @@
-#ifndef MEMOMY_MANAGER_CACHE_H
-#define MEMOMY_MANAGER_CACHE_H
+#ifndef MM_CACHE_H
+#define MM_CACHE_H
 
 #include <stddef.h>
 
@@ -37,4 +37,4 @@ int isEmpty(CachePtr);
 void push(CachePtr, CacheBlock, PA);
 CacheBlockPtr search(CachePtr table, PA addr);
 
-#endif //MEMOMY_MANAGER_CACHE_H
+#endif //MM_CACHE_H

@@ -1,5 +1,5 @@
-#ifndef MEMOMY_MANAGER_RAM_H
-#define MEMOMY_MANAGER_RAM_H
+#ifndef MM_RAM_H
+#define MM_RAM_H
 
 #ifndef PHYS_ADDR
 #define PHYS_ADDR
@@ -23,4 +23,4 @@ typedef Memory *MemoryPtr;
 void init_ram(MemoryPtr, size_t szMemory, size_t szPage);
 void destroy_ram(MemoryPtr);
 
-#endif //MEMOMY_MANAGER_RAM_H
+#endif //MM_RAM_H

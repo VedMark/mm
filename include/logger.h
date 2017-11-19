@@ -1,4 +1,5 @@
-#ifndef MEMOMY_MANAGER_LOGGER_H
+#ifndef MM_LOGGER_H
+#define MM_LOGGER_H
 
 void log_print(char *fmt, ...);
 
@@ -8,6 +9,4 @@ void log_print(char *fmt, ...);
 
 #define LOG_PRINT(...) log_print(__VA_ARGS__)
 
-#define MEMOMY_MANAGER_LOGGER_H
-
-#endif //MEMOMY_MANAGER_LOGGER_H
+#endif //MM_LOGGER_H

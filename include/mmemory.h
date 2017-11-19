@@ -1,6 +1,7 @@
-#ifndef MEMOMY_MANAGER_MMEMORY_H
-#define MEMOMY_MANAGER_MMEMORY_H
+#ifndef MM_MMEMORY_H
+#define MM_MMEMORY_H
 
+#include "err_codes.h"
 
 #ifndef VIRT_ADDR
 #define VIRT_ADDR
@@ -98,4 +99,4 @@ int init_(int, int);
 **/
 void destroy_();
 
-#endif //MEMOMY_MANAGER_MMEMORY_H
+#endif //MM_MMEMORY_H

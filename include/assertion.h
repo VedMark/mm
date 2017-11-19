@@ -1,5 +1,5 @@
-#ifndef ASSERTING
-#define ASSERTING
+#ifndef MM_ASSERTING_H
+#define MM_ASSERTING_H
 
 #include "logger.h"
 
@@ -18,4 +18,4 @@
     }                                                           \
 };
 
-#endif // ASSERTING
+#endif // MM_ASSERTING_H

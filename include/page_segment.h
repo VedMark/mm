@@ -1,5 +1,5 @@
-#ifndef MEMORY_MANAGER_PAGE_SEGMENT_H
-#define MEMORY_MANAGER_PAGE_SEGMENT_H
+#ifndef MM_PAGE_SEGMENT_H
+#define MM_PAGE_SEGMENT_H
 
 #ifndef PHYS_ADDR
 #define PHYS_ADDR
@@ -102,4 +102,4 @@ void print_blocks(Block *first);
 void print_page_table(PageTablePtr table);
 void print_all_what_I_need(SegmentTablePtr table);
 
-#endif //MEMORY_MANAGER_PAGE_SEGMENT_H
+#endif //MM_PAGE_SEGMENT_H
