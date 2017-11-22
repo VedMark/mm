@@ -1,9 +1,16 @@
 #ifndef MM_PAGE_SEGMENT_H
 #define MM_PAGE_SEGMENT_H
 
+#include <stdbool.h>
+
+#include "ram.h"
+
+typedef struct FileMap HardDrive;
+
 #ifndef PHYS_ADDR
 #define PHYS_ADDR
 typedef char *PA;
+typedef const PA const_PA;
 #endif
 
 #ifndef VIRT_ADDR
@@ -52,7 +59,6 @@ typedef PageTable *PageTablePtr;
 typedef const PageTable const*const_PageTablePtr;
 
 
-typedef unsigned long size_t;
 
 typedef enum AccessRules { READ = 1, WRITE = 2, EXEC = 4} AccessRules;
 
@@ -95,8 +101,36 @@ typedef const SegmentTable const *const_SegmentTablePtr;
 
 int alloc_block(SegmentTablePtr table, size_t szBlock, VA *va);
 int free_block(SegmentTablePtr table, VA va);
-int init_tables(SegmentTablePtr, u_int seg_count, u_int, size_t, PA);
-void destroy_tables(SegmentTablePtr);
+int init_tables(SegmentTablePtr restrict table,
+                u_int seg_count,
+                u_int n,
+                size_t szPage,
+                HardDrive *drive,
+                MemoryPtr restrict ram);
+
+void destroy_tables(SegmentTablePtr table);
+bool validate_access(const_PageTablePtr restrict table,
+                     u_int numPage,
+                     u_int offset,
+                     size_t szBuffer);
+
+void va_to_chunks(const_VA va,
+                         size_t szPage,
+                         u_int szAddr,
+                         u_int *numSeg,
+                         u_int *numPage,
+                         u_int *offset);
+VA get_va(size_t szPage, u_int szAddr, u_int numSeg, u_int numPage, u_int offset);
+PA get_pa(const_SegmentTablePtr restrict table, u_int numSeg, u_int numPage, u_int offset);
+u_int find_page_to_load(const_PageTablePtr restrict table, u_int iSeg);
+
+void read_data(const_SegmentTablePtr restrict table, u_int iSeg, u_int iPage, u_int offset,
+               void *pBuffer,
+               size_t szBuffer);
+
+void write_data(const_SegmentTablePtr restrict table, u_int iSeg, u_int iPage, u_int offset,
+                void *pBuffer,
+                size_t szBuffer);
 
 void print_blocks(Block *first);
 void print_page_table(PageTablePtr table);
