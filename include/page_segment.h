@@ -4,7 +4,9 @@
 #include <stdbool.h>
 
 #include "ram.h"
+#include "cache.h"
 
+typedef struct CacheEntry CacheEntry;
 typedef struct FileMap HardDrive;
 
 #ifndef PHYS_ADDR
@@ -35,8 +37,6 @@ typedef const Page const *const_PagePtr;
 
 typedef struct PageFlags {
     unsigned char   loaded: 1;
-    unsigned char   referenced: 1;
-    unsigned char   modified: 1;
 } PageFlags;
 
 typedef struct PageDescriptor {
@@ -64,8 +64,6 @@ typedef enum AccessRules { READ = 1, WRITE = 2, EXEC = 4} AccessRules;
 
 typedef struct SegmentFlags {
     unsigned char   loaded: 1;
-    unsigned char   referenced: 1;
-    unsigned char   modified: 1;
 } SegmentFlags;
 
 typedef PageTable Segment;
@@ -101,36 +99,33 @@ typedef const SegmentTable const *const_SegmentTablePtr;
 
 int alloc_block(SegmentTablePtr table, size_t szBlock, VA *va);
 int free_block(SegmentTablePtr table, VA va);
-int init_tables(SegmentTablePtr restrict table,
+int init_tables(SegmentTablePtr table,
                 u_int seg_count,
                 u_int n,
                 size_t szPage,
                 HardDrive *drive,
-                MemoryPtr restrict ram);
+                MemoryPtr ram);
 
 void destroy_tables(SegmentTablePtr table);
-bool validate_access(const_PageTablePtr restrict table,
+bool validate_access(const_PageTablePtr table,
                      u_int numPage,
                      u_int offset,
                      size_t szBuffer);
 
 void va_to_chunks(const_VA va,
-                         size_t szPage,
-                         u_int szAddr,
-                         u_int *numSeg,
-                         u_int *numPage,
-                         u_int *offset);
+                  size_t szPage,
+                  u_int szAddr,
+                  u_int *numSeg,
+                  u_int *numPage,
+                  u_int *offset);
 VA get_va(size_t szPage, u_int szAddr, u_int numSeg, u_int numPage, u_int offset);
-PA get_pa(const_SegmentTablePtr restrict table, u_int numSeg, u_int numPage, u_int offset);
-u_int find_page_to_load(const_PageTablePtr restrict table, u_int iSeg);
-
-void read_data(const_SegmentTablePtr restrict table, u_int iSeg, u_int iPage, u_int offset,
-               void *pBuffer,
-               size_t szBuffer);
-
-void write_data(const_SegmentTablePtr restrict table, u_int iSeg, u_int iPage, u_int offset,
-                void *pBuffer,
-                size_t szBuffer);
+PA get_pa(const_SegmentTablePtr table, u_int numSeg, u_int numPage, u_int offset);
+u_int find_page_to_load(const_PageTablePtr table, u_int iSeg);
+Block *find_block_by_offset(const_PagePtr page, u_int offset);
+void read_data(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, void *pBuffer, size_t szBuffer);
+void write_data(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, void *pBuffer, size_t szBuffer);
+void read_block(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, CacheEntry *entry);
+void write_block(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, CacheEntry *entry);
 
 void print_blocks(Block *first);
 void print_page_table(PageTablePtr table);

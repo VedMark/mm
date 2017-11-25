@@ -15,7 +15,7 @@ void destroy_ram(MemoryPtr memory) {
     free(memory->field);
 }
 
-void *read_from_memory(PA pa, void *buff, const size_t szBuffer) {
+void read_from_memory(PA pa, void *buff, const size_t szBuffer) {
     memcpy(buff, pa, szBuffer);
 }
 

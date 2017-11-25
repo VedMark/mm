@@ -29,7 +29,7 @@ typedef Memory *MemoryPtr;
 
 void init_ram(MemoryPtr memory, size_t szMemory);
 void destroy_ram(MemoryPtr memory);
-void *read_from_memory(PA pa, void *buff, size_t szBuffer);
+void read_from_memory(PA pa, void *buff, size_t szBuffer);
 void write_to_memory(PA pa, const void *buff, size_t szBuffer);
 
 #endif //MM_RAM_H

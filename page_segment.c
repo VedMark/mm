@@ -1,9 +1,11 @@
 #include <malloc.h>
 #include <zconf.h>
+#include <memory.h>
 
 #include "include/page_segment.h"
 #include "include/hard_drive.h"
 #include "include/err_codes.h"
+#include "include/cache.h"
 
 typedef enum Block_type{USED = 0, FREE, ANY} Block_type;
 
@@ -17,7 +19,6 @@ u_int get_best_fit_offset(const_PagePtr restrict ptrPage,
                           size_t szBlock,
                           Block **best_fit);
 inline u_int get_mask(u_int n);
-inline Block *find_block_by_offset(const_PagePtr page, u_int offset);
 u_int get_offset(const_PagePtr ptrPage, const Block const *ptrBlock);
 bool insert_block(PageTablePtr restrict table,
                   u_int j,
@@ -101,7 +102,7 @@ int init_tables(SegmentTablePtr restrict table,
         table->seg_nodes[i].descriptor.base_virt_addr = (VA) (i * page_per_seg * szPage + 2);
         table->seg_nodes[i].descriptor.base_phys_addr = ram->field + i * page_per_seg * szPage;
         table->seg_nodes[i].descriptor.size = i * page_per_seg * szPage;
-        table->seg_nodes[i].descriptor.flags = (SegmentFlags){0, 0, 0};
+        table->seg_nodes[i].descriptor.flags = (SegmentFlags){0};
         table->seg_nodes[i].segment = (SegmentPtr) malloc(sizeof(Segment));
         if(NULL == table->seg_nodes[i].segment) return EUNKNW;
         table->seg_nodes[i].segment->page_nodes = (PageNodePtr) calloc(n, sizeof(PageNode));
@@ -116,7 +117,7 @@ int init_tables(SegmentTablePtr restrict table,
             nodes[j].page.first_block->free = true;
             nodes[j].page.first_block->splited = false;
             nodes[j].page.max_free_size = szPage;
-            nodes[j].descriptor.flags = (PageFlags) {0, 0, 0};
+            nodes[j].descriptor.flags = (PageFlags) {0};
             if(pa + j * szPage >= ram->field + ram->size) {
                 nodes[j].descriptor.phys_addr = pa;
                 load_page(table, i, j, drive);
@@ -187,10 +188,8 @@ u_int find_page_to_load(const_PageTablePtr restrict table, const u_int iSeg) {
     const Block *block1 = NULL;
     const Block *block2 = NULL;
     for(u_int i = 0; i < table->count; ++i) {
-        if (!(table->page_nodes[i].descriptor.flags.loaded ||
-              table->page_nodes[i].descriptor.flags.referenced ||
-              table->page_nodes[i].descriptor.flags.modified) &&
-                (iSeg || i)) {
+        if (!table->page_nodes[i].descriptor.flags.loaded &&
+            (iSeg || i)) {
             while(i < table->count){
                 block2 = find_last(&table->page_nodes[i].page, ANY);
                 if(!block2->splited) {
@@ -256,6 +255,63 @@ void write_data(const_SegmentTablePtr restrict table,
         cur_shift += szRead;
         ++iPage;
         offset = 0;
+    }
+}
+
+size_t get_block_size(const_SegmentTablePtr table,
+                     u_int iSeg,
+                     u_int iPage,
+                     Block *block) {
+
+    size_t size = block->size;
+    while(block->splited) {
+        block = table->seg_nodes[iSeg].segment->page_nodes[iPage].page.first_block;
+        size += block->size;
+    }
+    return size;
+}
+
+void read_block(const_SegmentTablePtr table,
+                u_int iSeg,
+                u_int iPage,
+                u_int offset,
+                CacheEntry *entry) {
+
+    Block *block = find_block_by_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, offset);
+    offset = get_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, block);
+    PA pa = get_pa(table, iSeg, iPage, offset);
+    entry->ram_pa = pa;
+    entry->block.data = malloc(get_block_size(table, iSeg, iPage, block) * sizeof(char));
+    memcpy(entry->block.data, pa, block->size);
+    entry->block.size += block->size;
+
+    while(block->splited) {
+        block = table->seg_nodes[iSeg].segment->page_nodes[++iPage].page.first_block;
+        pa = get_pa(table, iSeg, iPage, 0);
+        memcpy(entry->block.data + entry->block.size, pa, block->size);
+        entry->block.size += block->size;
+    }
+}
+
+void write_block(const_SegmentTablePtr table,
+                 u_int iSeg,
+                 u_int iPage,
+                 u_int offset,
+                 CacheEntry *entry) {
+
+    Block *block = find_block_by_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, offset);
+    offset = get_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, block);
+    PA pa = get_pa(table, iSeg, iPage, offset);
+    entry->ram_pa = pa;
+    entry->block.data = malloc(get_block_size(table, iSeg, iPage, block) * sizeof(char));
+    memcpy(pa, entry->block.data, block->size);
+    entry->block.size += block->size;
+
+    while(block->splited) {
+        block = table->seg_nodes[iSeg].segment->page_nodes[++iPage].page.first_block;
+        pa = get_pa(table, iSeg, iPage, 0);
+        memcpy(pa, entry->block.data + entry->block.size, block->size);
+        entry->block.size += block->size;
     }
 }
 
@@ -519,11 +575,9 @@ void print_blocks(Block *first) {
 
 void print_page_table(PageTablePtr table) {
     for(u_int j = 0; j < table->count; ++j) {
-        printf("\t\t j: %d, base_pa: %d, l|m|r: %d|%d|%d, max_free_size: %d\n", j,
+        printf("\t\t j: %d, base_pa: %d, l|m|r: %d|, max_free_size: %d\n", j,
                (int) table->page_nodes[j].descriptor.phys_addr,
                table->page_nodes[j].descriptor.flags.loaded,
-               table->page_nodes[j].descriptor.flags.modified,
-               table->page_nodes[j].descriptor.flags.referenced,
                (int) table->page_nodes[j].page.max_free_size
         );
         print_blocks(table->page_nodes[j].page.first_block);
@@ -533,13 +587,11 @@ void print_page_table(PageTablePtr table) {
 void print_all_what_I_need(SegmentTablePtr table) {
     printf("page size: %d, seg count: %d, mem size: %d\n", (int) table->szPage, table->count, table->szAddr);
     for(u_int i = 0; i < table->count; ++i) {
-        printf("\t base_va: %d, base_pa: %d, size: %d, l|m|r: %d|%d|%d, rules: %d, ",
+        printf("\t base_va: %d, base_pa: %d, size: %d, l|m|r: %d|, rules: %d, ",
                (int) table->seg_nodes[i].descriptor.base_virt_addr,
                (int) table->seg_nodes[i].descriptor.base_phys_addr,
                (int) table->seg_nodes[i].descriptor.size,
                table->seg_nodes[i].descriptor.flags.loaded,
-               table->seg_nodes[i].descriptor.flags.modified,
-               table->seg_nodes[i].descriptor.flags.referenced,
                table->seg_nodes[i].descriptor.rules);
         printf("page_count: %d\n", table->seg_nodes->segment->count);
         print_page_table(table->seg_nodes[i].segment);
