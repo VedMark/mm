@@ -26,13 +26,13 @@ bool insert_block(PageTablePtr restrict table,
                   size_t szBlock,
                   size_t szPage,
                   int to_many);
-void remove_block(PageTablePtr table, u_int n_page, Block *block, Block *prev);
+void remove_block(PageTablePtr table, u_int iPage, Block *block, Block *prev);
 void set_max_free_size(PagePtr page);
 
 
 int alloc_block(SegmentTablePtr restrict table, size_t szBlock, VA *va) {
     u_int offset = 0;
-    for(u_int i = 0; i < table->count; ++i) {
+    for(u_int i = 0; i < table->size; ++i) {
         SegmentPtr ptrSegment = table->seg_nodes[i].segment;
         for (u_int j = 0; j < ptrSegment->count; ++j) {
             if(0 == i && 0 == j) continue;
@@ -40,7 +40,7 @@ int alloc_block(SegmentTablePtr restrict table, size_t szBlock, VA *va) {
                 if (found_multipage_space(ptrSegment, j, szBlock, true)) {
                     offset = get_offset(&ptrSegment->page_nodes[j].page,
                                         find_last(&ptrSegment->page_nodes[j].page, ANY));
-                    *va = get_va(table->szPage, table->szAddr, i, j, offset);
+                    *va = get_va(table->szPage, table->page_count, i, j, offset);
                     if(insert_block(table->seg_nodes[i].segment, j,
                                     (Block *) find_last(&ptrSegment->page_nodes[j].page, FREE),
                                     szBlock, table->szPage, true)) return SUCCESS;
@@ -52,7 +52,7 @@ int alloc_block(SegmentTablePtr restrict table, size_t szBlock, VA *va) {
                 if (ptrPage->max_free_size >= szBlock) {
                     Block *best_block = NULL;
                     offset = get_best_fit_offset(ptrPage, szBlock, &best_block);
-                    *va = get_va(table->szPage, table->szAddr, i, j, offset);
+                    *va = get_va(table->szPage, table->page_count, i, j, offset);
                     if(insert_block(table->seg_nodes[i].segment,
                                     j, best_block, szBlock, table->szPage, false)) return SUCCESS;
                     else return EUNKNW;
@@ -67,11 +67,13 @@ int free_block(SegmentTablePtr table, VA va){
     u_int n_seg = 0;
     u_int n_page = 0;
     u_int offset = 0;
-    va_to_chunks(va, table->szPage, table->szAddr, &n_seg, &n_page, &offset);
+
+    va_to_chunks(va, table->szPage, table->page_count, &n_seg, &n_page, &offset);
     if(0 == n_seg && 0 == n_page)
         return EUNKNW;
     Block *block = table->seg_nodes[n_seg].segment->page_nodes[n_page].page.first_block;
     Block *prev = NULL;
+
     u_int cur_offset = 0;
     while(NULL != block) {
         if(cur_offset >= offset) break;
@@ -81,6 +83,7 @@ int free_block(SegmentTablePtr table, VA va){
     }
     if(cur_offset != offset)
         return EUNKNW;
+
     remove_block(table->seg_nodes[n_seg].segment, n_page, block, prev);
     return SUCCESS;
 }
@@ -91,36 +94,43 @@ int init_tables(SegmentTablePtr restrict table,
                 const size_t szPage,
                 HardDrivePtr restrict drive,
                 MemoryPtr restrict ram) {
+
+    const u_int page_per_seg = n / seg_count;
+
     table->seg_nodes = (SegmentNodePtr) calloc(seg_count, sizeof(SegmentNode));
     if (NULL == table->seg_nodes) return EUNKNW;
     table->szPage = szPage;
-    table->count = seg_count;
-    table->szAddr = (u_int) (n * szPage);
-    const u_int page_per_seg = n / seg_count;
+    table->size = seg_count;
+    table->page_count = n;
 
     for(u_int i = 0; i < seg_count; ++i) {
         table->seg_nodes[i].descriptor.base_virt_addr = (VA) (i * page_per_seg * szPage + 2);
         table->seg_nodes[i].descriptor.base_phys_addr = ram->field + i * page_per_seg * szPage;
         table->seg_nodes[i].descriptor.size = i * page_per_seg * szPage;
-        table->seg_nodes[i].descriptor.flags = (SegmentFlags){0};
+
         table->seg_nodes[i].segment = (SegmentPtr) malloc(sizeof(Segment));
+        table->seg_nodes[i].segment->count = page_per_seg;
         if(NULL == table->seg_nodes[i].segment) return EUNKNW;
+
         table->seg_nodes[i].segment->page_nodes = (PageNodePtr) calloc(n, sizeof(PageNode));
         if(NULL == table->seg_nodes[i].segment->page_nodes) return EUNKNW;
-        table->seg_nodes[i].segment->count = page_per_seg;
+
         for(u_int j = 0; j < page_per_seg; j++) {
             PA pa = table->seg_nodes[i].descriptor.base_phys_addr;
             PageNodePtr nodes = table->seg_nodes[i].segment->page_nodes;
+            nodes[j].page.max_free_size = szPage;
             nodes[j].page.first_block = (Block *) malloc(sizeof(Block));
             if(NULL == nodes[j].page.first_block) return EUNKNW;
+
+            nodes[j].page.first_block->next = NULL;
             nodes[j].page.first_block->size = szPage;
             nodes[j].page.first_block->free = true;
             nodes[j].page.first_block->splited = false;
-            nodes[j].page.max_free_size = szPage;
-            nodes[j].descriptor.flags = (PageFlags) {0};
+
             if(pa + j * szPage >= ram->field + ram->size) {
-                nodes[j].descriptor.phys_addr = pa;
-                load_page(table, i, j, drive);
+                nodes[j].descriptor.phys_addr = ram->field;
+                if(EMLACK == push_page_to_drive(table, i, j, drive))
+                    return EUNKNW;
                 nodes[j].descriptor.flags.loaded = true;
             }
             else {
@@ -132,7 +142,8 @@ int init_tables(SegmentTablePtr restrict table,
 
 void destroy_tables(SegmentTablePtr restrict table) {
     Block *ptr = NULL;
-    for(u_int i = 0; i < table->count; ++i) {
+    if(NULL == table->seg_nodes) return;
+    for(u_int i = 0; i < table->size; ++i) {
         for(u_int j = 0; j < table->seg_nodes[i].segment->count; j++) {
             ptr = table->seg_nodes[i].segment->page_nodes[j].page.first_block;
             while(NULL != ptr) {
@@ -142,66 +153,81 @@ void destroy_tables(SegmentTablePtr restrict table) {
             }
         }
         free(table->seg_nodes[i].segment->page_nodes);
+        table->seg_nodes[i].segment->page_nodes = NULL;
         free(table->seg_nodes[i].segment);
+        table->seg_nodes[i].segment = NULL;
     }
     free(table->seg_nodes);
+    table->seg_nodes = NULL;
+    table->size = 0;
+    table->page_count = 0;
+    table->szPage = 0;
 }
 
 bool validate_access(const_PageTablePtr restrict table,
-                     const u_int numPage,
+                     const u_int iPage,
                      const u_int offset,
                      const size_t szBuffer) {
 
-    const Block *block = find_block_by_offset(&table->page_nodes[numPage].page, offset);
-    size_t diff = offset - get_offset(&table->page_nodes[numPage].page, block);
+    const Block *block = find_block_by_offset(&table->page_nodes[iPage].page, offset);
+    size_t diff = offset - get_offset(&table->page_nodes[iPage].page, block);
     size_t size = block->size;
-    u_int n_page = numPage;
-    do {
+    u_int n_page = iPage;
+    while(block->splited) {
         block = table->page_nodes[++n_page].page.first_block;
         size += block->size;
-    } while(block->splited);
+    }
     return size - diff >= szBuffer;
 }
 
-void va_to_chunks(const_VA va, const size_t szPage, const u_int szAddr,
-                  u_int *numSeg, u_int *numPage, u_int *offset) {
+void va_to_chunks(const_VA va, const size_t szPage, const u_int page_count,
+                  u_int *iSeg, u_int *iPage, u_int *offset) {
 
     const u_int lg_szPage = log_2((u_int) szPage);
-    const u_int lg_szAddr = log_2(szAddr << 1);
+    const u_int lg_page_count = log_2(page_count);
     *offset = (u_int) ((unsigned long) va & get_mask(lg_szPage));
-    *numPage = (u_int) ((unsigned long) va & get_mask(lg_szAddr) << lg_szPage) >> lg_szPage;
-    *numSeg = (u_int) ((unsigned long) va & get_mask(lg_szAddr) << lg_szAddr << lg_szPage)
-            >> lg_szAddr >> lg_szPage;
+    *iPage = (u_int) ((unsigned long) va & get_mask(lg_page_count) << lg_szPage) >> lg_szPage;
+    *iSeg = (u_int) ((unsigned long) va & get_mask(lg_page_count) << lg_page_count << lg_szPage)
+            >> lg_page_count >> lg_szPage;
 }
 
 PA get_pa(const_SegmentTablePtr restrict table,
-          const u_int numSeg,
-          const u_int numPage,
+          const u_int iSeg,
+          const u_int iPage,
           const u_int offset) {
 
-    return table->seg_nodes[numSeg].segment->page_nodes[numPage].descriptor.flags.loaded ?
+    return table->seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.flags.loaded ?
          NULL :
-         table->seg_nodes[numSeg].segment->page_nodes[numPage].descriptor.phys_addr + offset;
+         table->seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.phys_addr + offset;
 }
 
-u_int find_page_to_load(const_PageTablePtr restrict table, const u_int iSeg) {
+void find_page_to_load(const_SegmentTablePtr restrict table, u_int *piSeg, u_int *piPage) {
     const Block *block1 = NULL;
     const Block *block2 = NULL;
-    for(u_int i = 0; i < table->count; ++i) {
-        if (!table->page_nodes[i].descriptor.flags.loaded &&
-            (iSeg || i)) {
-            while(i < table->count){
-                block2 = find_last(&table->page_nodes[i].page, ANY);
-                if(!block2->splited) {
-                    if(i - 1 < 0) return i;
-                    block1 = find_last(&table->page_nodes[i - 1].page, ANY);
-                    if(!(block1->splited)) return i;
+    const_PageTablePtr pageTablePtr;
+    for(u_int i = 0; i < table->size; ++i) {
+        pageTablePtr = table->seg_nodes[i].segment;
+        for (u_int j = 0; j < pageTablePtr->count; ++j) {
+            if (!pageTablePtr->page_nodes[j].descriptor.flags.loaded &&
+                (i || j)) {
+                while (j < pageTablePtr->count) {
+                    block2 = find_last(&pageTablePtr->page_nodes[j].page, ANY);
+                    if (!block2->splited) {
+                        if (j - 1 < 0) {
+                            *piSeg=i, *piPage=j;
+                            break;
+                        }
+                        block1 = find_last(&pageTablePtr->page_nodes[j - 1].page, ANY);
+                        if (!(block1->splited)) {
+                            *piSeg=i, *piPage=j;
+                            break;
+                        }
+                    }
+                    ++j;
                 }
-                ++i;
             }
         }
     }
-    return 1;
 }
 
 void read_data(const_SegmentTablePtr restrict table,
@@ -280,37 +306,15 @@ void read_block(const_SegmentTablePtr table,
     Block *block = find_block_by_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, offset);
     offset = get_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, block);
     PA pa = get_pa(table, iSeg, iPage, offset);
-    entry->ram_pa = pa;
+    entry->virt_addr = get_va(table->szPage, table->page_count, iSeg, iPage, offset);
     entry->block.data = malloc(get_block_size(table, iSeg, iPage, block) * sizeof(char));
     memcpy(entry->block.data, pa, block->size);
-    entry->block.size += block->size;
+    entry->block.size = block->size;
 
     while(block->splited) {
         block = table->seg_nodes[iSeg].segment->page_nodes[++iPage].page.first_block;
         pa = get_pa(table, iSeg, iPage, 0);
         memcpy(entry->block.data + entry->block.size, pa, block->size);
-        entry->block.size += block->size;
-    }
-}
-
-void write_block(const_SegmentTablePtr table,
-                 u_int iSeg,
-                 u_int iPage,
-                 u_int offset,
-                 CacheEntry *entry) {
-
-    Block *block = find_block_by_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, offset);
-    offset = get_offset(&table->seg_nodes[iSeg].segment->page_nodes[iPage].page, block);
-    PA pa = get_pa(table, iSeg, iPage, offset);
-    entry->ram_pa = pa;
-    entry->block.data = malloc(get_block_size(table, iSeg, iPage, block) * sizeof(char));
-    memcpy(pa, entry->block.data, block->size);
-    entry->block.size += block->size;
-
-    while(block->splited) {
-        block = table->seg_nodes[iSeg].segment->page_nodes[++iPage].page.first_block;
-        pa = get_pa(table, iSeg, iPage, 0);
-        memcpy(pa, entry->block.data + entry->block.size, block->size);
         entry->block.size += block->size;
     }
 }
@@ -419,15 +423,15 @@ u_int get_offset(const_PagePtr ptrPage, const Block const *ptrBlock) {
 }
 
 VA get_va(const size_t szPage,
-          const u_int szAddr,
-          const u_int numSeg,
-          const u_int numPage,
+          const u_int page_count,
+          const u_int iSeg,
+          const u_int iPage,
           const u_int offset) {
 
     const u_int lg_szPage = log_2((u_int) szPage);
-    const u_int lg_szAddr = log_2(szAddr << 1);
-    unsigned long res = numSeg << lg_szAddr;
-    res = res << lg_szPage | numPage << lg_szPage | offset;
+    const u_int lg_page_count = log_2(page_count);
+    unsigned long res = iSeg << lg_page_count;
+    res = res << lg_szPage | iPage << lg_szPage | offset;
     return (VA) res;
 }
 
@@ -492,45 +496,45 @@ u_int log_2(u_int num) {
     return res;
 }
 
-void remove_block(PageTablePtr table, u_int n_page, Block *block, Block *prev) {
+void remove_block(PageTablePtr table, u_int iPage, Block *block, Block *prev) {
     if(block->splited){
         if (NULL != prev) {
             if (prev->free) {
                 prev->next = NULL;
                 prev->size += block->size;
                 free(block);
-                set_max_free_size(&table->page_nodes[n_page].page);
+                set_max_free_size(&table->page_nodes[iPage].page);
             }
             else {
                 block->free = true;
                 block->splited = false;
             }
-            ++n_page;
+            ++iPage;
         }
-        while(n_page < table->count - 1 && table->page_nodes[n_page].page.first_block->splited) {
-            table->page_nodes[n_page].page.first_block->free = true;
-            table->page_nodes[n_page].page.first_block->splited = false;
-            block = table->page_nodes[n_page + 1].page.first_block;
+        while(iPage < table->count - 1 && table->page_nodes[iPage].page.first_block->splited) {
+            table->page_nodes[iPage].page.first_block->free = true;
+            table->page_nodes[iPage].page.first_block->splited = false;
+            block = table->page_nodes[iPage + 1].page.first_block;
             if(NULL != block->next && block->next->free) {
-                table->page_nodes[n_page + 1].page.first_block = block->next;
+                table->page_nodes[iPage + 1].page.first_block = block->next;
                 block->next->size += block->size;
                 free(block);
-                set_max_free_size(&table->page_nodes[n_page].page);
+                set_max_free_size(&table->page_nodes[iPage].page);
             }
             else {
                 block->free = true;
                 block->splited = false;
                 break;
             }
-            ++n_page;
+            ++iPage;
         }
     }
     else if(prev == NULL) {
         if(block->next && block->next->free) {
-            table->page_nodes[n_page].page.first_block = block->next;
+            table->page_nodes[iPage].page.first_block = block->next;
             block->next->size += block->size;
             free(block);
-            set_max_free_size(&table->page_nodes[n_page].page);
+            set_max_free_size(&table->page_nodes[iPage].page);
         }
         else block->free = true;
     }
@@ -543,7 +547,7 @@ void remove_block(PageTablePtr table, u_int n_page, Block *block, Block *prev) {
             prev->next = block->next;
             prev->size += block->size;
             free(block);
-            set_max_free_size(&table->page_nodes[n_page].page);
+            set_max_free_size(&table->page_nodes[iPage].page);
         }
     }
     else block->free = true;
@@ -585,8 +589,8 @@ void print_page_table(PageTablePtr table) {
 }
 
 void print_all_what_I_need(SegmentTablePtr table) {
-    printf("page size: %d, seg count: %d, mem size: %d\n", (int) table->szPage, table->count, table->szAddr);
-    for(u_int i = 0; i < table->count; ++i) {
+    printf("page size: %d, seg size: %d, mem size: %d\n", (int) table->szPage, table->size, table->page_count);
+    for(u_int i = 0; i < table->size; ++i) {
         printf("\t base_va: %d, base_pa: %d, size: %d, l|m|r: %d|, rules: %d, ",
                (int) table->seg_nodes[i].descriptor.base_virt_addr,
                (int) table->seg_nodes[i].descriptor.base_phys_addr,

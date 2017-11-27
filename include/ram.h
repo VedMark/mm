@@ -15,12 +15,6 @@ typedef const VA const_VA;
 
 typedef char *Data;
 
-typedef struct MemPage{
-    VA page_va;
-    Data data;
-} MemBlock;
-typedef MemBlock *MemPagePtr;
-
 typedef struct Memory {
     Data field;
     size_t size;

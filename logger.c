@@ -24,11 +24,11 @@ char *get_current_time() {
 }
 
 void log_print(char *fmt, ...) {
+#ifdef __LOGGER__
     va_list list;
     char    *p = 0;
     char    *str_arg = 0;
     int     int_arg = 0;
-
     printf("%s ", get_current_time());
     va_start(list, fmt);
 
@@ -55,4 +55,5 @@ void log_print(char *fmt, ...) {
     }
     va_end( list );
     printf("\n");
+#endif
 }

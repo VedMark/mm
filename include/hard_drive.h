@@ -20,10 +20,10 @@ typedef HardDrive *HardDrivePtr;
 
 void init_hard_drive(HardDrivePtr drive, char *location, size_t szPage, size_t size);
 void destroy_hard_drive(HardDrivePtr drive);
-int load_page(SegmentTablePtr table,
-                u_int iSeg,
-                u_int iPage,
-                HardDrivePtr restrict drive);
+int push_page_to_drive(SegmentTablePtr table,
+                       u_int iSeg,
+                       u_int iPage,
+                       HardDrivePtr restrict drive);
 int unload_page(SegmentTablePtr table,
                 u_int iSeg,
                 u_int iPage,

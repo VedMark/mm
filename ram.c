@@ -13,6 +13,7 @@ void init_ram(MemoryPtr memory, size_t szMemory) {
 
 void destroy_ram(MemoryPtr memory) {
     free(memory->field);
+    memory->field = NULL;
 }
 
 void read_from_memory(PA pa, void *buff, const size_t szBuffer) {

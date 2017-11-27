@@ -12,7 +12,7 @@
 
 #define RAM_MEM_SIZE ((USHRT_MAX + (1)))
 #define CACHE_MEM_SIZE (RAM_MEM_SIZE / (32))
-#define HDD_MEM_SIZE (RAM_MEM_SIZE / (2))
+#define HDD_MEM_SIZE (RAM_MEM_SIZE * (128))
 #define HDD_LOCATION "/tmp/mm_hard_drive"
 #define SEG_COUNT (2)
 
@@ -32,7 +32,6 @@ int malloc_(VA *ptr, size_t szBlock) {
     ASSERT(EUNKNW != ret_val, strerror(errno), EUNKNW);
     *ptr = va;
 
-
     return SUCCESS;
 }
 
@@ -49,29 +48,35 @@ int read_(VA ptr, void *pBuffer, size_t szBuffer) {
     u_int iSeg = 0;
     u_int iPage = 0;
     u_int offset = 0;
+    int ret_code = 0;
 
-    va_to_chunks(ptr, g_segmentTable.szPage, g_segmentTable.szAddr,
+    va_to_chunks(ptr, g_segmentTable.szPage, g_segmentTable.page_count,
                  &iSeg, &iPage, &offset);
     ASSERT(iSeg || iPage, "Invalid parameters", EWRPAR);
 
-    CacheNodePtr pCache_node = NULL;
-    PA pa = get_pa(&g_segmentTable, iSeg, iPage, offset);
-    if(CACHE_HIT == search_in_cache(&g_cache, pa, &pCache_node)) {
-        ASSERT(pa + szBuffer <= pCache_node->ram_pa + pCache_node->block.size,
-               "Outside block reading",
+    CacheEntryPtr pCache_node = NULL;
+    VA va = get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, offset);
+    if(CACHE_HIT == search_in_cache(&g_cache, va, &pCache_node)) {
+        ASSERT(va + szBuffer <= pCache_node->virt_addr + pCache_node->block.size,
+               "Outside block access",
                EOBORD);
-        read_from_cache(pCache_node, pa, pBuffer, szBuffer);
+        read_from_cache(pCache_node, va, pBuffer, szBuffer);
     }
     else {
         ASSERT(validate_access(g_segmentTable.seg_nodes[iSeg].segment, iPage, offset, szBuffer),
-               "Outside block reading",
+               "Outside block access",
                EOBORD);
 
         if (g_segmentTable.seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.flags.loaded) {
-            unload_page(&g_segmentTable,
-                        iSeg,
-                        iPage,
-                        &g_HDD);
+            remove_loaded_blocks(&g_cache,
+                                 get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, 0),
+                                 g_HDD.szPage);
+
+            ret_code = unload_page(&g_segmentTable,
+                                   iSeg,
+                                   iPage,
+                                   &g_HDD);
+            ASSERT(EUNKNW == ret_code, "Unknown error", EUNKNW);
         }
 
         read_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer);
@@ -90,25 +95,40 @@ int write_(VA ptr, void *pBuffer, size_t szBuffer) {
     u_int iSeg = 0;
     u_int iPage = 0;
     u_int offset = 0;
+    int ret_code = 0;
 
-    va_to_chunks(ptr, g_segmentTable.szPage, g_segmentTable.szAddr,
+    va_to_chunks(ptr, g_segmentTable.szPage, g_segmentTable.page_count,
                  &iSeg, &iPage, &offset);
     ASSERT(iSeg || iPage, "Invalid parameters", EWRPAR);
     ASSERT(validate_access(g_segmentTable.seg_nodes[iSeg].segment, iPage, offset, szBuffer),
-           "Outside block reading",
+           "Outside block access",
            EOBORD);
 
-    CacheNodePtr pCache_node = NULL;
-    PA pa = get_pa(&g_segmentTable, iSeg, iPage, offset);
-    if(CACHE_HIT == search_in_cache(&g_cache, pa, &pCache_node)) {
-        ASSERT(pa + szBuffer <= pCache_node->ram_pa + pCache_node->block.size,
-               "Outside block reading",
+    if (g_segmentTable.seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.flags.loaded) {
+        remove_loaded_blocks(&g_cache,
+                             get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, 0),
+                             g_HDD.szPage);
+
+        ret_code = unload_page(&g_segmentTable,
+                               iSeg,
+                               iPage,
+                               &g_HDD);
+        ASSERT(EUNKNW != ret_code, "Unknown error", EUNKNW);
+    }
+
+    write_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer);
+
+    CacheEntryPtr pCache_node = NULL;
+    VA va = get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, offset);
+    if(CACHE_HIT == search_in_cache(&g_cache, va, &pCache_node)) {
+        ASSERT(va + szBuffer <= pCache_node->virt_addr + pCache_node->block.size,
+               "Outside block access",
                EOBORD);
-        write_to_cache(pCache_node, pa, pBuffer, szBuffer);
+        write_to_cache(pCache_node, va, pBuffer, szBuffer);
     }
     else {
         ASSERT(validate_access(g_segmentTable.seg_nodes[iSeg].segment, iPage, offset, szBuffer),
-               "Outside block reading",
+               "Outside block access",
                EOBORD);
 
         CacheEntry *cacheEntry = malloc(sizeof(CacheEntry));
@@ -116,22 +136,13 @@ int write_(VA ptr, void *pBuffer, size_t szBuffer) {
         push_new_entry(&g_cache, cacheEntry);
     }
 
-    if (g_segmentTable.seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.flags.loaded) {
-        unload_page(&g_segmentTable,
-                    iSeg,
-                    iPage,
-                    &g_HDD);
-    }
-
-    write_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer);
-
     return SUCCESS;
 }
 
 int init_(int n, int szPage) {
     int ret_val = 0;
 
-    ASSERT(0 < n && 0 < szPage, "Invalid parameters", EWRPAR);
+    ASSERT(0 < n && 0 < szPage && szPage <= RAM_MEM_SIZE, "Invalid parameters", EWRPAR);
 
     init_ram(&g_RAM, RAM_MEM_SIZE);
     ASSERT(g_RAM.field, strerror(errno), EUNKNW);
