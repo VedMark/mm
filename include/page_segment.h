@@ -90,8 +90,8 @@ typedef const SegmentNode const *const_SegmentNodePtr;
 typedef struct SegmentTable{
     SegmentNodePtr  seg_nodes;
     size_t          szPage;
-    u_int           count;
-    u_int           szAddr;
+    u_int           size;
+    u_int           page_count;
 } SegmentTable;
 typedef SegmentTable *SegmentTablePtr;
 typedef const SegmentTable const *const_SegmentTablePtr;
@@ -105,27 +105,38 @@ int init_tables(SegmentTablePtr table,
                 size_t szPage,
                 HardDrive *drive,
                 MemoryPtr ram);
-
 void destroy_tables(SegmentTablePtr table);
 bool validate_access(const_PageTablePtr table,
                      u_int numPage,
                      u_int offset,
                      size_t szBuffer);
-
 void va_to_chunks(const_VA va,
                   size_t szPage,
                   u_int szAddr,
                   u_int *numSeg,
                   u_int *numPage,
                   u_int *offset);
-VA get_va(size_t szPage, u_int szAddr, u_int numSeg, u_int numPage, u_int offset);
+VA get_va(size_t szPage, u_int szAddr, u_int iSeg, u_int iPage, u_int offset);
 PA get_pa(const_SegmentTablePtr table, u_int numSeg, u_int numPage, u_int offset);
-u_int find_page_to_load(const_PageTablePtr table, u_int iSeg);
+void find_page_to_load(const_SegmentTablePtr restrict pageTablePtr, u_int *piSeg, u_int *piPage);
 Block *find_block_by_offset(const_PagePtr page, u_int offset);
-void read_data(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, void *pBuffer, size_t szBuffer);
-void write_data(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, void *pBuffer, size_t szBuffer);
-void read_block(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, CacheEntry *entry);
-void write_block(const_SegmentTablePtr table, u_int iSeg, u_int iPage, u_int offset, CacheEntry *entry);
+void read_data(const_SegmentTablePtr table,
+               u_int iSeg,
+               u_int iPage,
+               u_int offset,
+               void *pBuffer,
+               size_t szBuffer);
+void write_data(const_SegmentTablePtr table,
+                u_int iSeg,
+                u_int iPage,
+                u_int offset,
+                void *pBuffer,
+                size_t szBuffer);
+void read_block(const_SegmentTablePtr table,
+                u_int iSeg,
+                u_int iPage,
+                u_int offset,
+                CacheEntry *entry);
 
 void print_blocks(Block *first);
 void print_page_table(PageTablePtr table);
