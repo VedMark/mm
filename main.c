@@ -1,5 +1,6 @@
 #define __LOGGER__
 
+#include "tests/load_test.h"
 #include "tests/test_init.h"
 #include "tests/test_malloc.h"
 #include "tests/test_free.h"
@@ -12,6 +13,8 @@ int main(int argc, char *argv[]) {
     run_free_tests();
     run_write_tests();
     run_read_tests();
+
+    run_load_test();
 
     return 0;
 }
