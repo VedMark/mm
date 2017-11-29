@@ -25,7 +25,7 @@ void run_init_tests(void) {
     _init_test(0, 5, EWRPAR);
     _init_test(8, 8, SUCCESS);
     _init_test(8, 0x8000, SUCCESS);
-    _init_test(8, 0x100000, EWRPAR);
+    _init_test(8, 0x10000000, EWRPAR);
 
     printf("\n");
 }

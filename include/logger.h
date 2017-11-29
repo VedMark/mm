@@ -1,8 +1,6 @@
 #ifndef MM_LOGGER_H
 #define MM_LOGGER_H
 
-// #define __LOGGER__
-
 void log_print(char *fmt, ...);
 
 /*

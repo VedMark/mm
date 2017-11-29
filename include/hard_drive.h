@@ -11,6 +11,7 @@ typedef struct FileMap{
     size_t last;
     size_t szPage;
     size_t size;
+    size_t szEntry;
     char *location;
     unsigned char *data;
 } FileMap;

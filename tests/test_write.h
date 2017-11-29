@@ -22,20 +22,26 @@ void _write_test(VA ptr, void *pBuffer, size_t szBuffer, int ret_code) {
 
 void run_write_tests(void) {
     printf("UNIT TESTS: write_\n");
-    init_(4, 0x8000);
+    init_(32, 0x80);
 
     VA ptr0 = (VA) 1;
     VA *ptr1 = malloc(sizeof(VA));
     VA *ptr2 = malloc(sizeof(VA));
     VA *ptr3 = malloc(sizeof(VA));
     VA *ptr4 = malloc(sizeof(VA));
+    VA *ptr5 = malloc(sizeof(VA));
     malloc_(ptr1, 32);
     malloc_(ptr2, 514);
-    malloc_(ptr3, 0x8000);
-    malloc_(ptr4, 0x8000);
+    malloc_(ptr3, 0x100);
+    malloc_(ptr4, 0x200);
+    malloc_(ptr5, 0x200);
 
     char *pBuffer1 = "Stranger things";
     char *pBuffer2 = "Fantastic Beasts and Where to Find Them";
+    char *pBuffer3 = malloc(0x100 * sizeof(char));
+    char *pBuffer4 = malloc(0x200 * sizeof(char));
+    fill_buffer(pBuffer3, 0x100);
+    fill_buffer(pBuffer4, 0x200);
     int arr[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
                  11,12,13,14,15,16,17,18,19,20,
                  21,22,23,24,25,26,27,28,29,30,
@@ -54,13 +60,19 @@ void run_write_tests(void) {
     _write_test(*ptr1, pBuffer1, strlen(pBuffer1), SUCCESS);
     _write_test(*ptr1, pBuffer1, strlen(pBuffer1), SUCCESS);
     _write_test(*ptr2, pBuffer2, strlen(pBuffer2), SUCCESS);
+    _write_test(*ptr3, pBuffer3, 0x100, SUCCESS);
     _write_test(*ptr4, arr, 100 * sizeof(int), SUCCESS);
     _write_test(*ptr4 + 10 * sizeof(int), arr1, 1 * sizeof(int), SUCCESS);
+    _write_test(*ptr4 + 10 * sizeof(int), arr1, 1 * sizeof(int), SUCCESS);
+    _write_test(*ptr5, pBuffer4, 0x200, SUCCESS);
 
     free(ptr1);
     free(ptr2);
     free(ptr3);
     free(ptr4);
+    free(ptr5);
+    free(pBuffer3);
+    free(pBuffer4);
 
     destroy_();
     printf("\n");

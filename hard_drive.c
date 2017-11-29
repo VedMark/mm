@@ -8,7 +8,7 @@
 #include <memory.h>
 
 void init_hard_drive(HardDrivePtr drive, char *location, size_t szPage, size_t size) {
-    drive->fd = open(location, O_RDWR | O_CREAT);
+    drive->fd = open(location, O_RDWR | O_CREAT | O_TRUNC, 0);
     if(-1 == drive->fd) return;
     if(-1 == lseek(drive->fd, size-1, SEEK_SET)){
         drive->data = (void *) 1;
@@ -18,6 +18,7 @@ void init_hard_drive(HardDrivePtr drive, char *location, size_t szPage, size_t s
     drive->location = location;
     drive->szPage = szPage;
     drive->size = size;
+    drive->szEntry = szPage + sizeof(VA);
     drive->data = (unsigned char*) mmap(NULL,
                                         size,
                                         PROT_READ | PROT_WRITE,
@@ -44,17 +45,13 @@ int load_page(SegmentTablePtr restrict table,
 
     VA va = get_va(table->szPage, table->page_count, iSeg, iPage, 0);
 
-    memcpy(drive->data + pos * drive->szPage, &va, sizeof(VA));
-    void *ptr = malloc(drive->szPage);
-    memcpy(ptr, table->seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.phys_addr,
-           drive->szPage);
-    memcpy(drive->data + pos * drive->szPage + sizeof(VA),
+    memcpy(drive->data + pos * drive->szEntry, &va, sizeof(VA));
+    memcpy(drive->data + pos * drive->szEntry + sizeof(VA),
            table->seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.phys_addr,
            drive->szPage);
 
     table->seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.phys_addr = NULL;
     table->seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.flags.loaded = true;
-
     return SUCCESS;
 }
 
@@ -63,8 +60,9 @@ int push_page_to_drive(SegmentTablePtr restrict table,
                        const u_int iPage,
                        HardDrivePtr restrict drive) {
 
-    if((drive->last + 1) * drive->szPage > drive->size)
+    if((drive->last + 1) * drive->szEntry > drive->size) {
         return EMLACK;
+    }
     load_page(table, iSeg, iPage, drive->last, drive);
     drive->last++;
 
@@ -79,13 +77,13 @@ int unload_page(SegmentTablePtr restrict table,
     void *data = malloc(drive->szPage * sizeof(char));
     VA unload_va = NULL;
     u_int i = 0;
-    const u_int hd_entry_count = (const u_int) (drive->size / (drive->szPage + sizeof(VA)));
+    const u_int hd_entry_count = (const u_int) (drive->size / drive->szEntry);
 
     VA va = get_va(table->szPage, table->page_count, iSeg, iPage, 0);
     for(; i < hd_entry_count; ++i) {
-        memcpy(&unload_va, drive->data + i * drive->szPage, sizeof(VA));
-        if(unload_va == va) {
-            memcpy(data, drive->data + i * drive->szPage + sizeof(VA), drive->szPage);
+        memcpy(&unload_va, drive->data + i * drive->szEntry, sizeof(VA));
+            if(unload_va == va) {
+            memcpy(data, drive->data + i * drive->szEntry + sizeof(VA), drive->szPage);
             break;
         }
     }
@@ -100,10 +98,10 @@ int unload_page(SegmentTablePtr restrict table,
             table->seg_nodes[iLoad_seg].segment->page_nodes[iLoad_page].descriptor.phys_addr;
 
     load_page(table, iLoad_seg, iLoad_page, i, drive);
-
     write_to_memory(table->seg_nodes[iSeg].segment->page_nodes[iPage].descriptor.phys_addr,
                     data,
                     drive->szPage);
 
+    free(data);
     return SUCCESS;
 }

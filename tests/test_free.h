@@ -31,6 +31,8 @@ void run_free_tests(void) {
     _free_test(*ptr1, SUCCESS);
     _free_test(*ptr2, SUCCESS);
 
+    free(ptr1);
+    free(ptr2);
     destroy_();
     printf("\n");
 }

@@ -23,9 +23,9 @@ void destroy_cache(CachePtr cache) {
     }
 }
 
-void push_new_entry(CachePtr cache, CacheEntryPtr entry) {
+bool push_new_entry(CachePtr cache, CacheEntryPtr entry) {
     if(entry->block.size > cache->capacity) {
-        return;
+        return false;
     }
     while(entry->block.size > cache->avail_size){
         remove_least_significant_block(cache);
@@ -40,6 +40,7 @@ void push_new_entry(CachePtr cache, CacheEntryPtr entry) {
     }
     cache->tail = entry;
     cache->avail_size -= entry->block.size;
+    return true;
 }
 
 SearchRes search_in_cache(register CachePtr table, register VA addr, register CacheEntryPtr *entry) {
@@ -113,5 +114,6 @@ void remove_entry(register CachePtr cache, register CacheEntry *entry) {
         entry->next->prev = entry->prev;
     if(NULL != entry->prev)
         entry->prev->next = entry->next;
+    free(entry->block.data);
     free(entry);
 }

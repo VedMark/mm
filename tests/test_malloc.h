@@ -36,7 +36,7 @@ void run_malloc_tests(void) {
     _malloc_test(ptr, 128, SUCCESS);
     _malloc_test(ptr, 128 * 128, EMLACK);
 
-    free_(*ptr);
+    free(ptr);
     destroy_();
     printf("\n");
 }

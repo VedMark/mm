@@ -8,14 +8,12 @@
 #include "include/cache.h"
 #include "include/hard_drive.h"
 #include "include/mmemory.h"
-#include "include/page_segment.h"
 
-#define RAM_MEM_SIZE ((USHRT_MAX + (1)))
+#define RAM_MEM_SIZE (256 * (USHRT_MAX + (1)))
 #define CACHE_MEM_SIZE (RAM_MEM_SIZE / (32))
-#define HDD_MEM_SIZE (RAM_MEM_SIZE * (128))
+#define HDD_MEM_SIZE (RAM_MEM_SIZE * 32)
 #define HDD_LOCATION "/tmp/mm_hard_drive"
-#define SEG_COUNT (2)
-
+#define SEG_COUNT (2)   
 
 Memory g_RAM;
 HardDrive g_HDD;
@@ -35,7 +33,7 @@ int malloc_(VA *ptr, size_t szBlock) {
     return SUCCESS;
 }
 
-int free_(VA ptr){
+int free_(VA ptr) {
     int ret_val = free_block(&g_segmentTable, ptr);
     ASSERT(EWRPAR != ret_val, "Invalid parameters", EWRPAR);
     ASSERT(EUNKNW != ret_val, "Unknown error", EUNKNW);
@@ -52,7 +50,10 @@ int read_(VA ptr, void *pBuffer, size_t szBuffer) {
 
     va_to_chunks(ptr, g_segmentTable.szPage, g_segmentTable.page_count,
                  &iSeg, &iPage, &offset);
-    ASSERT(iSeg || iPage, "Invalid parameters", EWRPAR);
+    ASSERT((iSeg || iPage) &&
+           iSeg < g_segmentTable.size &&
+           iPage < g_segmentTable.seg_nodes[iSeg].segment->count, "Invalid parameters", EWRPAR);
+    ASSERT(g_segmentTable.seg_nodes[iSeg].descriptor.rules & READ, "No rights to read", EUNKNW);
 
     CacheEntryPtr pCache_node = NULL;
     VA va = get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, offset);
@@ -79,18 +80,20 @@ int read_(VA ptr, void *pBuffer, size_t szBuffer) {
             ASSERT(EUNKNW == ret_code, "Unknown error", EUNKNW);
         }
 
-        read_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer);
+        read_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer, &g_HDD);
 
-        CacheEntry *cacheEntry = malloc(sizeof(CacheEntry));
-        read_block(&g_segmentTable, iSeg, iPage, offset, cacheEntry);
-        push_new_entry(&g_cache, cacheEntry);
+        CacheEntryPtr cacheEntryPtr = read_block(&g_segmentTable, iSeg, iPage, offset, &g_HDD);
+        if(!push_new_entry(&g_cache, cacheEntryPtr)) {
+            free(cacheEntryPtr->block.data);
+            free(cacheEntryPtr);
+        };
     }
 
     return SUCCESS;
 }
 
 int write_(VA ptr, void *pBuffer, size_t szBuffer) {
-    ASSERT(NULL != ptr && szBuffer > 0, "Invalid parameters", EWRPAR);
+    ASSERT(NULL != pBuffer && szBuffer > 0, "Invalid parameters", EWRPAR);
 
     u_int iSeg = 0;
     u_int iPage = 0;
@@ -99,7 +102,10 @@ int write_(VA ptr, void *pBuffer, size_t szBuffer) {
 
     va_to_chunks(ptr, g_segmentTable.szPage, g_segmentTable.page_count,
                  &iSeg, &iPage, &offset);
-    ASSERT(iSeg || iPage, "Invalid parameters", EWRPAR);
+    ASSERT((iSeg || iPage) &&
+           iSeg < g_segmentTable.size &&
+           iPage < g_segmentTable.seg_nodes[iSeg].segment->count, "Invalid parameters", EWRPAR);
+    ASSERT(g_segmentTable.seg_nodes[iSeg].descriptor.rules & WRITE, "No rights to write", EUNKNW);
     ASSERT(validate_access(g_segmentTable.seg_nodes[iSeg].segment, iPage, offset, szBuffer),
            "Outside block access",
            EOBORD);
@@ -116,7 +122,7 @@ int write_(VA ptr, void *pBuffer, size_t szBuffer) {
         ASSERT(EUNKNW != ret_code, "Unknown error", EUNKNW);
     }
 
-    write_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer);
+    write_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer, &g_HDD);
 
     CacheEntryPtr pCache_node = NULL;
     VA va = get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, offset);
@@ -131,9 +137,11 @@ int write_(VA ptr, void *pBuffer, size_t szBuffer) {
                "Outside block access",
                EOBORD);
 
-        CacheEntry *cacheEntry = malloc(sizeof(CacheEntry));
-        read_block(&g_segmentTable, iSeg, iPage, offset, cacheEntry);
-        push_new_entry(&g_cache, cacheEntry);
+        CacheEntryPtr cacheEntryPtr = read_block(&g_segmentTable, iSeg, iPage, offset, &g_HDD);
+        if(!push_new_entry(&g_cache, cacheEntryPtr)) {
+            free(cacheEntryPtr->block.data);
+            free(cacheEntryPtr);
+        };
     }
 
     return SUCCESS;
@@ -155,7 +163,7 @@ int init_(int n, int szPage) {
 
     ret_val = init_tables(&g_segmentTable, SEG_COUNT, (u_int) n, (size_t) szPage, &g_HDD, &g_RAM);
     ASSERT(EUNKNW != ret_val, strerror(errno), EUNKNW);
-    g_segmentTable.seg_nodes[0].descriptor.rules = READ | EXEC;
+    g_segmentTable.seg_nodes[0].descriptor.rules = READ | WRITE;
     g_segmentTable.seg_nodes[1].descriptor.rules = READ | WRITE;
 
     return SUCCESS;

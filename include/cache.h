@@ -43,7 +43,7 @@ typedef Cache *CachePtr;
 void init_cache(CachePtr cache, size_t size);
 void destroy_cache(CachePtr cache);
 
-void push_new_entry(CachePtr cache, CacheEntryPtr entry);
+bool push_new_entry(CachePtr cache, CacheEntryPtr entry);
 SearchRes search_in_cache(CachePtr table, VA addr, CacheEntryPtr *entry);
 void read_from_cache(CacheEntryPtr node, VA va, void *pBuffer, size_t szBuffer);
 void write_to_cache(CacheEntryPtr node, VA va, void *pBuffer, size_t szBuffer);

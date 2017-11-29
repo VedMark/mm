@@ -116,30 +116,24 @@ void va_to_chunks(const_VA va,
                   u_int *numSeg,
                   u_int *numPage,
                   u_int *offset);
-VA get_va(size_t szPage, u_int szAddr, u_int iSeg, u_int iPage, u_int offset);
-PA get_pa(const_SegmentTablePtr table, u_int numSeg, u_int numPage, u_int offset);
+VA get_va(size_t szPage, u_int szAddr, u_int iSeg, u_int iPage, size_t offset);
+PA get_pa(const_SegmentTablePtr table, u_int numSeg, u_int numPage, size_t offset);
 void find_page_to_load(const_SegmentTablePtr restrict pageTablePtr, u_int *piSeg, u_int *piPage);
-Block *find_block_by_offset(const_PagePtr page, u_int offset);
-void read_data(const_SegmentTablePtr table,
+Block *find_block_by_offset(const_PagePtr page, size_t offset);
+void read_data(SegmentTablePtr table,
                u_int iSeg,
                u_int iPage,
                u_int offset,
                void *pBuffer,
-               size_t szBuffer);
-void write_data(const_SegmentTablePtr table,
+               size_t szBuffer,
+               HardDrive *drive);
+void write_data(SegmentTablePtr table,
                 u_int iSeg,
                 u_int iPage,
                 u_int offset,
                 void *pBuffer,
-                size_t szBuffer);
-void read_block(const_SegmentTablePtr table,
-                u_int iSeg,
-                u_int iPage,
-                u_int offset,
-                CacheEntry *entry);
-
-void print_blocks(Block *first);
-void print_page_table(PageTablePtr table);
-void print_all_what_I_need(SegmentTablePtr table);
+                size_t szBuffer,
+                HardDrive *drive);
+CacheEntry *read_block(SegmentTablePtr table, u_int iSeg, u_int iPage, size_t offset, HardDrive *drive);
 
 #endif //MM_PAGE_SEGMENT_H
