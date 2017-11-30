@@ -62,21 +62,14 @@ typedef const PageTable const*const_PageTablePtr;
 
 typedef enum AccessRules { READ = 1, WRITE = 2, EXEC = 4} AccessRules;
 
-typedef struct SegmentFlags {
-    unsigned char   loaded: 1;
-} SegmentFlags;
-
 typedef PageTable Segment;
 
 typedef PageTablePtr SegmentPtr;
 typedef const PageTablePtr const *const_SegmentPtr;
 
 typedef struct SegmentDescriptor {
-    VA              base_virt_addr;
     PA              base_phys_addr;
-    size_t          size;
     AccessRules     rules;
-    SegmentFlags    flags;
 } SegmentDescriptor;
 typedef SegmentDescriptor *SegmentDescriptorPtr;
 

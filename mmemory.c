@@ -56,12 +56,11 @@ int read_(VA ptr, void *pBuffer, size_t szBuffer) {
     ASSERT(g_segmentTable.seg_nodes[iSeg].descriptor.rules & READ, "No rights to read", EUNKNW);
 
     CacheEntryPtr pCache_node = NULL;
-    VA va = get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, offset);
-    if(CACHE_HIT == search_in_cache(&g_cache, va, &pCache_node)) {
-        ASSERT(va + szBuffer <= pCache_node->virt_addr + pCache_node->block.size,
+    if(CACHE_HIT == search_in_cache(&g_cache, ptr, &pCache_node)) {
+        ASSERT(ptr + szBuffer <= pCache_node->virt_addr + pCache_node->block.size,
                "Outside block access",
                EOBORD);
-        read_from_cache(pCache_node, va, pBuffer, szBuffer);
+        read_from_cache(pCache_node, ptr, pBuffer, szBuffer);
     }
     else {
         ASSERT(validate_access(g_segmentTable.seg_nodes[iSeg].segment, iPage, offset, szBuffer),
@@ -125,18 +124,13 @@ int write_(VA ptr, void *pBuffer, size_t szBuffer) {
     write_data(&g_segmentTable, iSeg, iPage, offset, pBuffer, szBuffer, &g_HDD);
 
     CacheEntryPtr pCache_node = NULL;
-    VA va = get_va(g_segmentTable.szPage, g_segmentTable.page_count, iSeg, iPage, offset);
-    if(CACHE_HIT == search_in_cache(&g_cache, va, &pCache_node)) {
-        ASSERT(va + szBuffer <= pCache_node->virt_addr + pCache_node->block.size,
+    if(CACHE_HIT == search_in_cache(&g_cache, ptr, &pCache_node)) {
+        ASSERT(ptr + szBuffer <= pCache_node->virt_addr + pCache_node->block.size,
                "Outside block access",
                EOBORD);
-        write_to_cache(pCache_node, va, pBuffer, szBuffer);
+        write_to_cache(pCache_node, ptr, pBuffer, szBuffer);
     }
     else {
-        ASSERT(validate_access(g_segmentTable.seg_nodes[iSeg].segment, iPage, offset, szBuffer),
-               "Outside block access",
-               EOBORD);
-
         CacheEntryPtr cacheEntryPtr = read_block(&g_segmentTable, iSeg, iPage, offset, &g_HDD);
         if(!push_new_entry(&g_cache, cacheEntryPtr)) {
             free(cacheEntryPtr->block.data);
