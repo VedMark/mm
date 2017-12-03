@@ -6,10 +6,7 @@
 #include "include/hard_drive.h"
 #include "include/err_codes.h"
 
-typedef enum Block_type{USED = 0, FREE, ANY} Block_type;
-
-
-const Block *find_last(const_PagePtr restrict ptrPage, Block_type type);
+const Block *find_last(const_PagePtr restrict ptrPage);
 bool found_multipage_space(const_PageTablePtr restrict page_table,
                            u_int index, size_t szBlock, int bFirst);
 inline u_int log_2(u_int num);
@@ -35,11 +32,11 @@ int alloc_block(SegmentTablePtr restrict table, size_t szBlock, VA *va) {
             if (szBlock > table->szPage) {
                 if (found_multipage_space(ptrSegment, j, szBlock, true)) {
                     offset = get_offset(&ptrSegment->page_nodes[j].page,
-                                        find_last(&ptrSegment->page_nodes[j].page, ANY));
+                                        find_last(&ptrSegment->page_nodes[j].page));
                     *va = get_va(table->szPage, table->page_count, i, j, offset);
                     if(insert_block(table->seg_nodes[i].segment,
                                     j,
-                                    (Block *) find_last(&ptrSegment->page_nodes[j].page, FREE),
+                                    (Block *) find_last(&ptrSegment->page_nodes[j].page),
                                     szBlock,
                                     table->szPage)) return SUCCESS;
                     else return EUNKNW;
@@ -71,7 +68,7 @@ int free_block(SegmentTablePtr table, VA va){
     va_to_chunks(va, table->szPage, table->page_count, &iSeg, &iPage, &offset);
     if(!(iSeg || iPage) || iSeg >= table->size ||
        iPage >= table->seg_nodes[iSeg].segment->count){
-        return EUNKNW;
+        return EWRPAR;
     }
     Block *block = table->seg_nodes[iSeg].segment->page_nodes[iPage].page.first_block;
     Block *prev = NULL;
@@ -172,6 +169,7 @@ bool validate_access(const_PageTablePtr restrict table,
                      const size_t szBuffer) {
 
     const Block *block = find_block_by_offset(&table->page_nodes[iPage].page, offset);
+    if(block->free) return false;
     size_t diff = offset - get_offset(&table->page_nodes[iPage].page, block);
     size_t size = block->size;
     u_int n_page = iPage;
@@ -211,13 +209,13 @@ void find_page_to_load(const_SegmentTablePtr restrict table, u_int *piSeg, u_int
         pageTablePtr = table->seg_nodes[i].segment;
         for (u_int j = 0; j < pageTablePtr->count; ++j) {
             if (!pageTablePtr->page_nodes[j].descriptor.flags.loaded && (i || j)) {
-                block2 = find_last(&pageTablePtr->page_nodes[j].page, ANY);
+                block2 = find_last(&pageTablePtr->page_nodes[j].page);
                 if (block2 && !block2->splited) {
                     if (j <= 0) {
                         *piSeg = i, *piPage = j;
                         return;
                     }
-                    block1 = find_last(&pageTablePtr->page_nodes[j - 1].page, ANY);
+                    block1 = find_last(&pageTablePtr->page_nodes[j - 1].page);
                     if (block1 && !block1->splited) {
                         *piSeg = i, *piPage = j;
                         return;
@@ -359,24 +357,13 @@ CacheEntryPtr read_block(SegmentTablePtr table, u_int iSeg, u_int iPage, size_t 
     return entry;
 }
 
-const Block *find_last(const_PagePtr restrict ptrPage, Block_type type) {
+const Block *find_last(const_PagePtr restrict ptrPage) {
     const Block *ptr = ptrPage->first_block;
-    const Block *last_block = ptrPage->first_block;
     if(NULL == ptr) return NULL;
-    if(type == ANY) {
-        while(NULL != ptr->next) {
-            last_block = ptr = ptr->next;
-        }
-    }
-    else{
         while(NULL != ptr->next) {
             ptr = ptr->next;
-            if(ptr->free == type)
-                last_block = ptr;
         }
-        if(type != ptr->free) return NULL;
-    }
-    return last_block;
+    return ptr;
 }
 
 bool found_multipage_space(const_PageTablePtr restrict page_table,
@@ -387,8 +374,8 @@ bool found_multipage_space(const_PageTablePtr restrict page_table,
     if(szBlock <= 0) return true;
     if(index >= page_table->count) return false;
     if(bFirst) {
-        const Block *block = find_last(&page_table->page_nodes[index].page, FREE);
-        if(NULL != block) avail_size = block->size;
+        const Block *block = find_last(&page_table->page_nodes[index].page);
+        if(block && block->free) avail_size = block->size;
         else {
             return false;
         }
