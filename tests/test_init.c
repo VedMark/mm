@@ -1,29 +1,49 @@
+#include <assert.h>
 #include <stdio.h>
-#include <zconf.h>
 
 #include "include/tests.h"
 #include "../include/err_codes.h"
 #include "../include/mmemory.h"
 
-void _init_test(int n, int szPage, int ret_code) {
-    static u_int i = 0;
-    printf("Test %d: ", ++i);
-    if(init_(n, szPage) == ret_code) {
-        printf("PASSED\n");
-    }
-    else {
-        printf("FAILED\n");
-    }
+void init_0Page5Size_WrongParams() {
+    int ret_code = 0;
+
+    ret_code = init_(0, 5);
     destroy_();
+
+    assert(ret_code == EWRPAR);
+    if(ret_code == EWRPAR)
+        printf("%s: PASSED\n",__FUNCTION__);
+}
+
+void init_8Page8Size_Success() {
+    int ret_code = 0;
+
+    ret_code = init_(8, 8);
+    destroy_();
+
+    assert(ret_code == SUCCESS);
+    if(ret_code == SUCCESS)
+        printf("%s: PASSED\n",__FUNCTION__);
+}
+
+void init_32Page0x10000Size_Success() {
+    int ret_code = 0;
+
+    ret_code = init_(32, 0x100000);
+    destroy_();
+
+    assert(ret_code == SUCCESS);
+    if(ret_code == SUCCESS)
+        printf("%s: PASSED\n",__FUNCTION__);
 }
 
 void run_init_tests(void) {
     printf("UNIT TESTS: init_\n");
 
-    _init_test(0, 5, EWRPAR);
-    _init_test(8, 8, SUCCESS);
-    _init_test(8, 0x8000, SUCCESS);
-    _init_test(8, 0x10000000, EWRPAR);
+    init_0Page5Size_WrongParams();
+    init_8Page8Size_Success();
+    init_32Page0x10000Size_Success();
 
     printf("\n");
 }

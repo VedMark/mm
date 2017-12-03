@@ -5,12 +5,6 @@
 #include "include/tests.h"
 #include "../include/mmemory.h"
 
-void fill_buffer(char *pBuffer, size_t szBuffer) {
-    for(u_int i = 0; i < szBuffer; ++i) {
-        *(pBuffer + i) = 'a';
-    }
-}
-
 void print_array(int *arr, size_t szArr) {
     printf("[");
     for(u_int i = 0; i < szArr; ++i) {
@@ -22,6 +16,7 @@ void print_array(int *arr, size_t szArr) {
 
 void run_load_test(void) {
 
+    printf("LOAD TEST:\n");
     time_t tBegin = 0;
     time_t tEnd = 0;
     u_int k = 0;
@@ -36,7 +31,7 @@ void run_load_test(void) {
 
     pwBuffer = malloc(0x2000);
     prBuffer = malloc(0x2000);
-    fill_buffer(pwBuffer, 0x2000);
+    FILL_BUFFER(pwBuffer, 0x2000);
     for(u_int i = 10; i < 0x3000; i += 500) {
         ptr = malloc((i / 2 - 1) * sizeof(VA));
         tBegin = clock();
@@ -73,7 +68,7 @@ void run_load_test(void) {
     for(u_int i = 1; i < 0x2000000; i <<= 1) {
         pwBuffer = malloc(2 * i);
         prBuffer = malloc(2 * i);
-        fill_buffer(pwBuffer, 2 * i);
+        FILL_BUFFER(pwBuffer, 2 * i);
         tBegin = clock();
 
         init_(0x20, i);
